@@ -11,6 +11,20 @@ export default {
         sm: ".1875rem", /* 3px */
       },
       colors: {
+        emerald: {
+          400: '#34d399',
+          500: '#10b981',
+          600: '#059669',
+        },
+        gray: {
+          900: '#111827',
+          800: '#1f2937',
+          700: '#374151',
+          600: '#4b5563',
+          400: '#9ca3af',
+          300: '#d1d5db',
+          750: '#2a3442',
+        },
         // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",

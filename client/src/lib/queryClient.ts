@@ -11,15 +11,35 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
-): Promise<Response> {
+): Promise<any> {
+  const token = localStorage.getItem("token");
+  const headers: Record<string, string> = {};
+  
+  if (data && typeof data !== "string") {
+    headers["Content-Type"] = "application/json";
+  }
+  
+  if (typeof data === "string") {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+  }
+  
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    headers,
+    body: data ? (typeof data === "string" ? data : JSON.stringify(data)) : undefined,
     credentials: "include",
   });
 
   await throwIfResNotOk(res);
+  
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return await res.json();
+  }
   return res;
 }
 
@@ -29,8 +49,37 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const token = localStorage.getItem("token");
+    const headers: Record<string, string> = {};
+    
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const baseUrl = queryKey[0] as string;
+    const params = queryKey[1] as Record<string, any> | undefined;
+    
+    let url = baseUrl;
+    if (params) {
+      const searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            searchParams.append(key, value.join(','));
+          } else {
+            searchParams.append(key, String(value));
+          }
+        }
+      });
+      const queryString = searchParams.toString();
+      if (queryString) {
+        url = `${baseUrl}?${queryString}`;
+      }
+    }
+
+    const res = await fetch(url, {
       credentials: "include",
+      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
