@@ -1,0 +1,590 @@
+Open SearchSearch
+Keyboard Shortcut:CTRL⌃ k
+
+Introduction
+
+Close Group
+Authentication
+
+Resend Otp
+HTTP Method: POST
+
+Create User Request
+HTTP Method: POST
+
+Login For Access Token
+HTTP Method: POST
+
+Reset Password
+HTTP Method: POST
+
+User Info
+HTTP Method: GET
+
+Close Group
+Dashboard
+
+Transfer Funds
+HTTP Method: POST
+
+Notif
+HTTP Method: GET
+
+Recent Trades
+HTTP Method: GET
+
+Close Group
+Arbitrage
+
+Arbitrage Ex
+HTTP Method: GET
+
+Arbitrage Sym
+HTTP Method: GET
+
+Opportunity Scanner
+HTTP Method: GET
+
+Close Group
+Models
+
+​Body​_login​_for​_access​_token​_auth​_token​_post
+
+​Create​User​Request
+
+​H​T​T​P​Validation​Error
+
+​Notification​Response
+
+​O​T​P​Resend
+
+​Reset​Password
+
+​Token
+
+​Trade​Status
+
+​Transfer​Request
+
+​Validation​Error
+Open API Client
+Powered by Scalar
+
+v0.11
+OAS 3.1.0
+Artminty
+
+Download OpenAPI Document
+
+Download OpenAPI Document
+Backend of SBS APP by Musigwe Labs @musigwe@gmail.com
+
+Server
+Server:
+https://gat-zm1r.onrender.com
+
+Authentication
+Optional
+SelectAuth Type
+No authentication selected
+Client Libraries
+Shell Curl
+Authentication ​Copy link
+AuthenticationOperations
+post
+/auth/otp-resend
+post
+/auth/create-user
+post
+/auth/token
+post
+/auth/reset-password
+get
+/auth/user-info
+Resend Otp​Copy link
+Body
+required
+application/json
+emailCopy link to email
+Type:Email
+required
+It should just be a Valid Email Addresss
+
+Responses
+
+200
+Successful Response
+
+422
+Validation Error
+Request Example forpost/auth/otp-resend
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/auth/otp-resend \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{
+  "email": "elinteerie@gmail.com"
+}'
+
+Test Request
+(post /auth/otp-resend)
+Status:200
+Status:422
+null
+Successful Response
+
+Create User Request​Copy link
+Body
+required
+application/json
+emailCopy link to email
+Type:Email
+required
+It should just be a Valid Email Addresss
+
+passwordCopy link to password
+Type:Password
+required
+Choose Strong Password
+
+Responses
+
+201
+Successful Response
+
+422
+Validation Error
+Request Example forpost/auth/create-user
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/auth/create-user \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{
+  "email": "elinteerie@gmail.com",
+  "password": "password"
+}'
+
+Test Request
+(post /auth/create-user)
+Status:201
+Status:422
+null
+Successful Response
+
+Login For Access Token​Copy link
+Body
+required
+application/x-www-form-urlencoded
+emailCopy link to email
+Type:Email
+required
+passwordCopy link to password
+Type:Password
+required
+client​_idCopy link to client​_id
+Type:Client Id
+client​_secretCopy link to client​_secret
+Type:Client Secret
+scopeCopy link to scope
+Type:Scope
+default: 
+""
+Responses
+
+200
+Successful Response
+
+422
+Validation Error
+Request Example forpost/auth/token
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/auth/token \
+  --request POST \
+  --header 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'email=' \
+  --data-urlencode 'password=' \
+  --data-urlencode 'scope=' \
+  --data-urlencode 'client_id=' \
+  --data-urlencode 'client_secret='
+
+Test Request
+(post /auth/token)
+Status:200
+Status:422
+
+{
+  "access_token": "string",
+  "token_type": "string",
+  "expires": "string"
+}
+Successful Response
+
+Reset Password​Copy link
+Body
+required
+application/json
+emailCopy link to email
+Type:Email
+required
+Be A Valid Email Address
+
+otpCopy link to otp
+Type:Otp
+required
+passwordCopy link to password
+Type:Password
+required
+Password
+
+Responses
+
+200
+Successful Response
+
+422
+Validation Error
+Request Example forpost/auth/reset-password
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/auth/reset-password \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{
+  "email": "elinteerie@gmail.com",
+  "otp": "9877",
+  "password": "12345"
+}'
+
+Test Request
+(post /auth/reset-password)
+Status:200
+Status:422
+null
+Successful Response
+
+User Info​Copy link
+Responses
+
+200
+Successful Response
+Request Example forget/auth/user-info
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/auth/user-info \
+  --header 'Authorization: Bearer YOUR_SECRET_TOKEN'
+
+Test Request
+(get /auth/user-info)
+Status:200
+null
+Successful Response
+
+Dashboard ​Copy link
+DashboardOperations
+post
+/dash/transfer
+get
+/dash/notification
+get
+/dash/recent-trades
+Transfer Funds​Copy link
+Body
+required
+application/json
+amountCopy link to amount
+required
+
+Any of
+number
+Type:number
+from​_walletCopy link to from​_wallet
+Type:From Wallet
+Pattern:^(forex|arb|fut)$
+required
+to​_walletCopy link to to​_wallet
+Type:To Wallet
+Pattern:^(forex|arb|fut)$
+required
+Responses
+
+200
+Successful Response
+
+422
+Validation Error
+Request Example forpost/dash/transfer
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/dash/transfer \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_SECRET_TOKEN' \
+  --data '{
+  "from_wallet": "",
+  "to_wallet": "",
+  "amount": 1
+}'
+
+Test Request
+(post /dash/transfer)
+Status:200
+Status:422
+null
+Successful Response
+
+Notif​Copy link
+Responses
+
+200
+Successful Response
+Request Example forget/dash/notification
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/dash/notification \
+  --header 'Authorization: Bearer YOUR_SECRET_TOKEN'
+
+Test Request
+(get /dash/notification)
+Status:200
+
+[
+  {
+    "id": 1,
+    "action": "string",
+    "details": "string",
+    "created_at": "2025-11-19T00:57:02.824Z"
+  }
+]
+Successful Response
+
+Recent Trades​Copy link
+Query Parameters
+statusCopy link to status
+Type:TradeStatus
+enum
+nullable
+​P​E​N​D​I​N​G
+​C​O​M​P​L​E​T​E​D
+​A​C​T​I​V​E
+Responses
+
+200
+Successful Response
+
+422
+Validation Error
+Request Example forget/dash/recent-trades
+Shell Curl
+
+curl 'https://gat-zm1r.onrender.com/dash/recent-trades?status=PENDING' \
+  --header 'Authorization: Bearer YOUR_SECRET_TOKEN'
+
+Test Request
+(get /dash/recent-trades)
+Status:200
+Status:422
+null
+Successful Response
+
+Arbitrage ​Copy link
+ArbitrageOperations
+get
+/arb/arbitrage-exc
+get
+/arb/arbitrage-symbol
+get
+/arb/opportunity-scanner
+Arbitrage Ex​Copy link
+Responses
+
+200
+Successful Response
+Request Example forget/arb/arbitrage-exc
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/arb/arbitrage-exc
+
+Test Request
+(get /arb/arbitrage-exc)
+Status:200
+null
+Successful Response
+
+Arbitrage Sym​Copy link
+Responses
+
+200
+Successful Response
+Request Example forget/arb/arbitrage-symbol
+Shell Curl
+
+curl https://gat-zm1r.onrender.com/arb/arbitrage-symbol
+
+Test Request
+(get /arb/arbitrage-symbol)
+Status:200
+null
+Successful Response
+
+Opportunity Scanner​Copy link
+Query Parameters
+exchangesCopy link to exchanges
+Type:array Exchanges[]
+required
+List of exchanges to scan, e.g. ['BYBIT','MEXC','BINGX']
+
+symbolsCopy link to symbols
+Type:array Symbols[]
+required
+List of symbols to scan, e.g. ['BTCUSDT','ETHUSDT']
+
+min​_profitCopy link to min​_profit
+Type:Min Profit
+default: 
+0.001
+Responses
+
+200
+Successful Response
+
+422
+Validation Error
+Request Example forget/arb/opportunity-scanner
+Shell Curl
+
+curl 'https://gat-zm1r.onrender.com/arb/opportunity-scanner?exchanges=&symbols=&min_profit=0.001'
+
+Test Request
+(get /arb/opportunity-scanner)
+Status:200
+Status:422
+null
+Successful Response
+
+Models
+
+​Body​_login​_for​_access​_token​_auth​_token​_post​Copy link
+email
+Type:Email
+required
+password
+Type:Password
+required
+client​_id
+Type:Client Id
+client​_secret
+Type:Client Secret
+scope
+Type:Scope
+default: 
+""
+
+​Create​User​Request​Copy link
+email
+Type:Email
+required
+It should just be a Valid Email Addresss
+
+password
+Type:Password
+required
+Choose Strong Password
+
+
+​H​T​T​P​Validation​Error​Copy link
+detail
+Type:array ValidationError[]
+
+​Validation​Error
+
+​Notification​Response​Copy link
+action
+Type:Action
+required
+created​_at
+Type:Created At
+Format:date-time
+required
+the date-time notation as defined by RFC 3339, section 5.6, for example, 2017-07-21T17:32:28Z
+
+details
+Type:Details
+nullable
+required
+id
+Type:Id
+required
+Integer numbers.
+
+
+​O​T​P​Resend​Copy link
+email
+Type:Email
+required
+It should just be a Valid Email Addresss
+
+
+​Reset​Password​Copy link
+email
+Type:Email
+required
+Be A Valid Email Address
+
+otp
+Type:Otp
+required
+password
+Type:Password
+required
+Password
+
+
+​Token​Copy link
+access​_token
+Type:Access Token
+required
+expires
+Type:Expires
+required
+token​_type
+Type:Token Type
+required
+
+​Trade​Status​Copy link
+Type:TradeStatus
+enum
+​P​E​N​D​I​N​G
+​C​O​M​P​L​E​T​E​D
+​A​C​T​I​V​E
+
+​Transfer​Request​Copy link
+amount
+required
+
+Any of
+number
+Type:number
+from​_wallet
+Type:From Wallet
+Pattern:^(forex|arb|fut)$
+required
+to​_wallet
+Type:To Wallet
+Pattern:^(forex|arb|fut)$
+required
+
+​Validation​Error​Copy link
+loc
+Type:array
+required
+
+loc
+msg
+Type:Message
+required
+type
+Type:Error Type
+required
