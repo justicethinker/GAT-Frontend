@@ -37,7 +37,7 @@ export default function ResetPassword() {
   const onSendOTP = async (data: OTPResendInput) => {
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/send-otp", data);
+      await apiRequest("POST", "/auth/otp-resend", data);
       setOtpSent(true);
       setValue("email", data.email);
       toast({
@@ -58,7 +58,7 @@ export default function ResetPassword() {
   const onSubmit = async (data: ResetPasswordInput) => {
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/reset-password", data);
+      await apiRequest("POST", "/auth/reset-password", data);
       toast({
         title: "Success",
         description: "Password reset successfully! Please sign in.",

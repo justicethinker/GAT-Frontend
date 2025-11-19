@@ -30,7 +30,7 @@ export default function Login() {
       formData.append("email", data.email);
       formData.append("password", data.password);
 
-      const response = await apiRequest("POST", "/api/auth/login", formData.toString());
+      const response = await apiRequest("POST", "/auth/token", formData.toString());
       
       if (response.access_token) {
         localStorage.setItem("token", response.access_token);

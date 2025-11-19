@@ -11,7 +11,7 @@ export function Header() {
   const notifMenuRef = useRef<HTMLDivElement>(null);
 
   const { data: userInfo } = useQuery<{ email: string }>({
-    queryKey: ["/api/auth/user-info"],
+    queryKey: ["/auth/user-info"],
     retry: false,
   });
 
@@ -21,7 +21,7 @@ export function Header() {
     details: string | null;
     created_at: string;
   }>>({
-    queryKey: ["/api/dash/notification"],
+    queryKey: ["/dash/notification"],
     retry: false,
   });
 

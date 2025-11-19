@@ -12,18 +12,18 @@ export default function Arbitrage() {
   const [minProfit, setMinProfit] = useState(0.001);
 
   const { data: exchanges = [], isLoading: exchangesLoading } = useQuery({
-    queryKey: ["/api/arb/exchanges"],
+    queryKey: ["/arb/exchanges"],
     retry: false,
   });
 
   const { data: symbols = [], isLoading: symbolsLoading } = useQuery({
-    queryKey: ["/api/arb/symbols"],
+    queryKey: ["/arb/symbols"],
     retry: false,
   });
 
   const { data: opportunities = [], isLoading: opportunitiesLoading } = useQuery({
     queryKey: [
-      "/api/arb/opportunities",
+      "/arb/opportunities",
       {
         exchanges: selectedExchanges.join(','),
         symbols: selectedSymbols.join(','),

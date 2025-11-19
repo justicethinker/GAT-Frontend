@@ -26,7 +26,7 @@ export default function Register() {
   const onSubmit = async (data: CreateUserInput) => {
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/register", data);
+      await apiRequest("POST", "/auth/create-user", data);
       toast({
         title: "Success",
         description: "Account created successfully! Please sign in.",

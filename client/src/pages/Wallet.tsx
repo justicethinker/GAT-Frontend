@@ -49,7 +49,7 @@ export default function Wallet() {
 
   const transferMutation = useMutation({
     mutationFn: async (data: { from_wallet: string; to_wallet: string; amount: number }) => {
-      return await apiRequest("POST", "/api/dash/transfer", data);
+      return await apiRequest("POST", "/dash/transfer", data);
     },
     onSuccess: () => {
       toast({
@@ -60,7 +60,7 @@ export default function Wallet() {
       setFromWallet("");
       setToWallet("");
       setAmount("");
-      queryClient.invalidateQueries({ queryKey: ["/api/dash/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/dash/stats"] });
     },
     onError: (error: any) => {
       toast({

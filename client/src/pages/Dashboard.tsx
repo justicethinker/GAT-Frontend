@@ -7,12 +7,12 @@ import { Link } from "wouter";
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/dash/stats"],
+    queryKey: ["/dash/stats"],
     retry: false,
   });
 
   const { data: recentTrades = [], isLoading: tradesLoading } = useQuery<any[]>({
-    queryKey: ["/api/dash/recent-trades"],
+    queryKey: ["/dash/recent-trades"],
     retry: false,
   });
 
