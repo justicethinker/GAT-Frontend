@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -48,7 +48,11 @@ import {
   RefreshCw,
   Power,
   Cloud,
-  RotateCcw
+  RotateCcw,
+  LogOut,
+  UserCog,
+  Key,
+  History
 } from "lucide-react";
 
 // --- 1. CSS for Custom Dark Scrollbar ---
@@ -93,7 +97,6 @@ const StatCard = ({ title, value, subValue, icon: Icon, colorClass }: any) => (
         <h3 className="text-2xl font-bold text-white mb-1">{value}</h3>
         {subValue && (
            <span className={`text-xs font-medium ${colorClass} flex items-center`}>
-             {/* Render trending icon only if it's a string with % or similar, otherwise just custom content */}
              {typeof subValue === 'string' && (subValue.includes('%') || subValue.includes('+')) && <TrendingUp size={12} className="mr-1" />} 
              {subValue}
            </span>
@@ -220,6 +223,35 @@ const Admin = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   
+  // --- Profile Dropdown & Modal State ---
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileActiveTab, setProfileActiveTab] = useState("Profile"); // Profile, Password, Activity
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleOpenProfileModal = (tab: string) => {
+    setProfileActiveTab(tab);
+    setIsProfileModalOpen(true);
+    setIsProfileMenuOpen(false);
+  };
+
+  const handleLogout = () => {
+    // Clear token and redirect
+    localStorage.removeItem("token");
+    setLocation("/");
+  };
+
   // Shared State
   const [timeRange, setTimeRange] = useState("7D");
   const timeFilters = ["24H", "7D", "30D", "90D"];
@@ -480,6 +512,99 @@ const Admin = () => {
           </div>
         )}
 
+        {/* --- PROFILE SETTINGS MODAL --- */}
+        {isProfileModalOpen && (
+          <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+            <div className="bg-gray-900 rounded-lg border border-gray-800 w-full max-w-2xl shadow-2xl relative flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between p-6 border-b border-gray-800">
+                <h3 className="text-xl font-bold text-white">Admin Profile</h3>
+                <button onClick={() => setIsProfileModalOpen(false)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+              </div>
+              
+              {/* Tabs */}
+              <div className="flex border-b border-gray-800 px-6">
+                {['Profile', 'Password', 'Activity'].map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setProfileActiveTab(tab)}
+                    className={`px-6 py-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap flex items-center gap-2 ${profileActiveTab === tab ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-gray-400 hover:text-white'}`}
+                  >
+                    {tab === 'Profile' && <UserCog size={16} />}
+                    {tab === 'Password' && <Key size={16} />}
+                    {tab === 'Activity' && <History size={16} />}
+                    {tab === 'Profile' ? 'Profile Settings' : tab === 'Password' ? 'Change Password' : 'Activity Log'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Content */}
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                {profileActiveTab === 'Profile' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-6">
+                      <div className="w-24 h-24 rounded-full bg-gray-800 flex items-center justify-center text-emerald-500 text-3xl font-bold border-2 border-emerald-500/30">
+                        AD
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-bold text-white">Admin User</h4>
+                        <p className="text-gray-400">Super Administrator</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-500 text-xs font-bold border border-emerald-500/20">ACTIVE</span>
+                          <span className="text-xs text-gray-500">Last login: Today, 10:42 AM</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div><label className="block text-sm font-medium text-gray-400 mb-2">Full Name</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" defaultValue="Admin User" /></div>
+                      <div><label className="block text-sm font-medium text-gray-400 mb-2">Email Address</label><input type="email" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" defaultValue="admin@tradingpro.com" /></div>
+                      <div><label className="block text-sm font-medium text-gray-400 mb-2">Role</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-gray-500 cursor-not-allowed" defaultValue="Super Admin" disabled /></div>
+                      <div><label className="block text-sm font-medium text-gray-400 mb-2">Phone Number</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" defaultValue="+1 (555) 123-4567" /></div>
+                    </div>
+                    <div className="pt-4 flex justify-end">
+                      <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">Save Changes</button>
+                    </div>
+                  </div>
+                )}
+
+                {profileActiveTab === 'Password' && (
+                  <div className="space-y-6 max-w-lg">
+                    <div><label className="block text-sm font-medium text-gray-400 mb-2">Current Password</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" placeholder="••••••••" /></div>
+                    <div><label className="block text-sm font-medium text-gray-400 mb-2">New Password</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" placeholder="Enter new password" /></div>
+                    <div><label className="block text-sm font-medium text-gray-400 mb-2">Confirm New Password</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" placeholder="Confirm new password" /></div>
+                    <div className="pt-4">
+                      <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">Update Password</button>
+                    </div>
+                  </div>
+                )}
+
+                {profileActiveTab === 'Activity' && (
+                  <div className="space-y-4">
+                    <h4 className="text-white font-medium mb-2">Recent Admin Actions</h4>
+                    {[
+                      { action: "Updated System Settings", time: "2 hours ago", type: "System" },
+                      { action: "Approved Withdrawal #9921", time: "5 hours ago", type: "Payment" },
+                      { action: "Banned User: bad_actor_99", time: "1 day ago", type: "User" },
+                      { action: "Login from IP 192.168.1.1", time: "1 day ago", type: "Auth" },
+                      { action: "Changed Trading Fees", time: "2 days ago", type: "Trading" },
+                    ].map((log, i) => (
+                      <div key={i} className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg border border-gray-800">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gray-800 rounded-full text-emerald-500"><Activity size={16} /></div>
+                          <div>
+                            <p className="text-sm text-white font-medium">{log.action}</p>
+                            <p className="text-xs text-gray-500">{log.time}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-300">{log.type}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Sidebar */}
         <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-gray-900 border-r border-gray-800 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="p-6 flex items-center justify-between">
@@ -504,7 +629,7 @@ const Admin = () => {
         <main className="flex-1 flex flex-col h-screen overflow-hidden">
           
           {/* Header */}
-          <header className="bg-gray-900 border-b border-gray-800 h-16 flex items-center justify-between px-6 shrink-0">
+          <header className="bg-gray-900 border-b border-gray-800 h-16 flex items-center justify-between px-6 shrink-0 relative z-40">
             <div className="flex items-center gap-4">
               <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-400 hover:text-white"><Menu size={24} /></button>
               <h2 className="text-xl font-bold hidden sm:block">{activeTab}</h2>
@@ -512,7 +637,37 @@ const Admin = () => {
             <div className="flex items-center gap-6">
               <div className="hidden lg:flex items-center gap-2"><div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div><span className="text-xs text-gray-400">System Online</span></div>
               <div className="relative cursor-pointer"><Bell className="text-gray-400 hover:text-white transition-colors" size={20} /><span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center text-white">3</span></div>
-              <div className="flex items-center gap-3 pl-6 border-l border-gray-800 cursor-pointer"><div className="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center"><UserIcon size={16} className="text-white" /></div><div className="hidden sm:block"><p className="text-sm font-medium text-white">Admin</p></div><ChevronDown size={16} className="text-gray-400" /></div>
+              
+              {/* --- ADMIN DROPDOWN --- */}
+              <div className="relative" ref={profileMenuRef}>
+                <div 
+                  className="flex items-center gap-3 pl-6 border-l border-gray-800 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                >
+                  <div className="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center"><UserIcon size={16} className="text-white" /></div>
+                  <div className="hidden sm:block"><p className="text-sm font-medium text-white">Admin</p></div>
+                  <ChevronDown size={16} className={`text-gray-400 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+                </div>
+
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-gray-900 border border-gray-800 rounded-lg shadow-xl z-50 py-2 animate-in fade-in zoom-in-95 duration-100">
+                    <button onClick={() => handleOpenProfileModal('Profile')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2">
+                      <UserCog size={16} /> Profile Settings
+                    </button>
+                    <button onClick={() => handleOpenProfileModal('Password')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2">
+                      <Key size={16} /> Change Password
+                    </button>
+                    <button onClick={() => handleOpenProfileModal('Activity')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2">
+                      <History size={16} /> Activity Log
+                    </button>
+                    <div className="border-t border-gray-800 my-1"></div>
+                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-2">
+                      <LogOut size={16} /> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+
             </div>
           </header>
 

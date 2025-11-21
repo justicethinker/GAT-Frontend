@@ -1,6 +1,7 @@
 // src/pages/Settings.tsx
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Header } from '@/components/Header'; // ← Your real header with notifications & email
 import { useTheme } from '../hooks/useTheme';
 import {
   User,
@@ -34,21 +35,18 @@ export default function Settings() {
     queryKey: ['/auth/user-info'],
   });
 
-  const handleLogout = async () => {
-    await fetch('/auth/logout', { method: 'POST' });
-    localStorage.removeItem('token');
-    window.location.href = '/login';
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-white">
+      {/* ←←← YOUR REAL HEADER IS NOW HERE ←←← */}
+      <Header />
+
       <div className="max-w-6xl mx-auto px-4 py-8 lg:px-8 lg:py-12">
         <h1 className="text-3xl font-bold mb-8">Settings</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Sidebar - Fixed width, no stretching */}
+          {/* Sidebar */}
           <div className="lg:col-span-3">
-            <nav className="bg-slate-900 rounded-2xl p-3 sticky top-8">
+            <nav className="bg-slate-900 rounded-2xl p-3 sticky top-20"> {/* top-20 because header is 64px */}
               {navItems.map((item) => (
                 <button
                   key={item.name}
@@ -65,7 +63,11 @@ export default function Settings() {
               ))}
 
               <button
-                onClick={handleLogout}
+                onClick={async () => {
+                  await fetch('/auth/logout', { method: 'POST' });
+                  localStorage.removeItem('token');
+                  window.location.href = '/login';
+                }}
                 className="w-full flex items-center gap-4 px-5 py-3.5 rounded-xl text-red-500 hover:bg-red-500/10 transition mt-6"
               >
                 <LogOut className="w-5 h-5" />
@@ -74,7 +76,7 @@ export default function Settings() {
             </nav>
           </div>
 
-          {/* Content Area - Clean, dense, beautiful */}
+          {/* Main Content */}
           <div className="lg:col-span-9">
             <div className="bg-slate-900 rounded-2xl p-8 lg:p-10">
               {activeTab === 'Account' && <AccountTab user={user} />}
@@ -179,7 +181,7 @@ function AccountTab({ user }: { user: any }) {
   );
 }
 
-// ── Coming Soon Tabs ────────────────────────────────────────────────
+// ── Coming Soon ───────────────────────────────────────────────────────
 function ComingSoonTab({ title }: { title: string }) {
   return (
     <div className="h-full flex flex-col items-center justify-center py-20 text-center">
@@ -192,7 +194,7 @@ function ComingSoonTab({ title }: { title: string }) {
   );
 }
 
-// ── Appearance Tab ───────────────────────────────────────────────────
+// ── Appearance ────────────────────────────────────────────────────────
 function AppearanceTab({ theme, setTheme }: { theme: 'light' | 'dark' | 'system'; setTheme: (t: 'light' | 'dark' | 'system') => void }) {
   const themes = [
     { value: 'light' as const, icon: Sun, label: 'Light' },
