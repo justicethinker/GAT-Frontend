@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useMutation } from "@tanstack/react-query";
+import { ArrowUpRight, ArrowDownLeft, RefreshCw, Wallet as WalletIcon, ArrowRightLeft } from "lucide-react";
 
 export default function Wallet() {
   const [transferOpen, setTransferOpen] = useState(false);
@@ -19,31 +20,37 @@ export default function Wallet() {
 
   const wallets = [
     {
-      name: "Arbitrage",
+      name: "Arbitrage Wallet",
       abbreviation: "AR",
       type: "arb",
-      balance: 0,
-      value: 0,
-      change: 0,
-      color: "bg-purple-600",
+      balance: 45231.50,
+      value: 45231.50,
+      change: 12.5,
+      color: "bg-purple-500",
+      border: "border-purple-500/20",
+      bg: "bg-purple-500/10"
     },
     {
-      name: "Forex",
+      name: "Forex Account",
       abbreviation: "FX",
       type: "forex",
-      balance: 0,
-      value: 0,
-      change: 0,
-      color: "bg-blue-600",
+      balance: 28450.75,
+      value: 28450.75,
+      change: 5.2,
+      color: "bg-blue-500",
+      border: "border-blue-500/20",
+      bg: "bg-blue-500/10"
     },
     {
-      name: "Futures",
+      name: "Futures Margin",
       abbreviation: "FU",
       type: "fut",
-      balance: 0,
-      value: 0,
-      change: 0,
-      color: "bg-yellow-600",
+      balance: 92707.35,
+      value: 92707.35,
+      change: -2.4,
+      color: "bg-yellow-500",
+      border: "border-yellow-500/20",
+      bg: "bg-yellow-500/10"
     },
   ];
 
@@ -73,230 +80,198 @@ export default function Wallet() {
 
   const handleTransfer = () => {
     if (!fromWallet || !toWallet || !amount) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
       return;
     }
-
     if (fromWallet === toWallet) {
-      toast({
-        title: "Error",
-        description: "Cannot transfer to the same wallet",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Cannot transfer to the same wallet", variant: "destructive" });
       return;
     }
-
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please enter a valid amount", variant: "destructive" });
       return;
     }
-
-    transferMutation.mutate({
-      from_wallet: fromWallet,
-      to_wallet: toWallet,
-      amount: amountNum,
-    });
+    transferMutation.mutate({ from_wallet: fromWallet, to_wallet: toWallet, amount: amountNum });
   };
 
   return (
     <Layout>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <section className="mb-8">
-          <Card className="bg-gray-900 shadow-lg border-emerald-500/30">
-            <div className="p-6 border-b border-gray-700">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
-                <h2 className="text-2xl font-bold text-white flex items-center">
-                  <i className="ri-pie-chart-line mr-3 text-emerald-400"></i>Portfolio Overview
-                </h2>
-                <button className="text-emerald-400 hover:text-emerald-300 transition-colors self-start sm:self-auto">
-                  <i className="ri-refresh-line text-xl"></i>
-                </button>
-              </div>
+      <div className="min-h-screen bg-slate-950 w-full pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          
+          {/* Header & Portfolio Value */}
+          <div className="mb-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">Assets</h1>
+              <Button variant="outline" size="sm" className="border-slate-700 hover:bg-slate-800 text-slate-300">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
             </div>
 
-            <div className="p-6">
-              <div className="mb-8 p-6 bg-gradient-to-r from-emerald-600/20 to-emerald-800/20 rounded-xl border border-emerald-500/30">
-                <div className="text-center">
-                  <p className="text-gray-400 text-sm mb-2">Total Portfolio Value</p>
-                  <p className="text-4xl lg:text-5xl font-bold text-white mb-3" data-testid="text-portfolio-value">
-                    $166,389.6
-                  </p>
-                  <div className="flex items-center justify-center space-x-4">
-                    <p className="text-emerald-400 text-sm flex items-center">
-                      <i className="ri-arrow-up-line mr-1"></i>
-                      +$12,456.20
-                    </p>
-                    <p className="text-emerald-400 text-sm">+8.09% (24h)</p>
+            <div className="relative overflow-hidden bg-gradient-to-br from-emerald-900/40 to-slate-900 border border-emerald-500/20 rounded-3xl p-6 sm:p-10 shadow-2xl">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+              
+              <div className="relative z-10">
+                <p className="text-slate-400 font-medium mb-2">Total Portfolio Value</p>
+                <h2 className="text-4xl sm:text-6xl font-bold text-white mb-4 tracking-tight">
+                  $166,389.60
+                </h2>
+                <div className="flex items-center gap-3">
+                  <span className="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-sm font-bold border border-emerald-500/20">
+                    +8.09%
+                  </span>
+                  <span className="text-emerald-400/80 text-sm">+$12,456.20 (24h)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+             <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+                <DialogTrigger asChild>
+                  <button className="flex items-center justify-between bg-slate-900 border border-slate-800 hover:border-emerald-500/50 p-6 rounded-2xl transition-all group">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-900/20 group-hover:scale-110 transition-transform">
+                            <ArrowRightLeft className="w-6 h-6" />
+                        </div>
+                        <div className="text-left">
+                            <h3 className="text-lg font-bold text-white">Transfer Funds</h3>
+                            <p className="text-slate-400 text-sm">Move assets between wallets</p>
+                        </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-emerald-500/20 group-hover:text-emerald-400 transition-colors">
+                        <ArrowUpRight className="w-5 h-5" />
+                    </div>
+                  </button>
+                </DialogTrigger>
+                
+                {/* Transfer Dialog Content */}
+                <DialogContent className="bg-slate-900 border-slate-800 sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle className="text-white text-xl">Transfer Funds</DialogTitle>
+                    <DialogDescription className="text-slate-400">
+                      Instantly move funds between your trading accounts.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-5 mt-4">
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">From</Label>
+                      <Select value={fromWallet} onValueChange={setFromWallet}>
+                        <SelectTrigger className="bg-slate-950 border-slate-800 text-white h-12">
+                          <SelectValue placeholder="Select source wallet" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800">
+                          <SelectItem value="arb">Arbitrage Wallet</SelectItem>
+                          <SelectItem value="forex">Forex Account</SelectItem>
+                          <SelectItem value="fut">Futures Margin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex justify-center">
+                        <div className="bg-slate-800 p-2 rounded-full">
+                            <ArrowUpRight className="w-4 h-4 text-slate-400 rotate-45" />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">To</Label>
+                      <Select value={toWallet} onValueChange={setToWallet}>
+                        <SelectTrigger className="bg-slate-950 border-slate-800 text-white h-12">
+                          <SelectValue placeholder="Select destination wallet" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800">
+                          <SelectItem value="arb">Arbitrage Wallet</SelectItem>
+                          <SelectItem value="forex">Forex Account</SelectItem>
+                          <SelectItem value="fut">Futures Margin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-slate-300">Amount (USDT)</Label>
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="bg-slate-950 border-slate-800 text-white h-12 font-mono text-lg"
+                      />
+                    </div>
+
+                    <Button 
+                        onClick={handleTransfer} 
+                        disabled={transferMutation.isPending}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-12 font-bold text-base mt-2"
+                    >
+                        {transferMutation.isPending ? "Processing..." : "Confirm Transfer"}
+                    </Button>
+                  </div>
+                </DialogContent>
+             </Dialog>
+
+             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center text-slate-300">
+                        <WalletIcon className="w-6 h-6" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-white">Wallet Address</h3>
+                        <p className="text-slate-400 text-sm font-mono">0x1234...5678</p>
+                    </div>
+                </div>
+                <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white">
+                    Copy
+                </Button>
+             </div>
+          </div>
+
+          {/* Wallets Grid */}
+          <h3 className="text-xl font-bold text-white mb-4">Your Accounts</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {wallets.map((wallet) => (
+              <Card 
+                key={wallet.type} 
+                className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-all overflow-hidden group"
+              >
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className={`w-12 h-12 rounded-xl ${wallet.bg} ${wallet.color.replace('bg-', 'text-')} flex items-center justify-center font-bold text-xl`}>
+                      {wallet.abbreviation}
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${wallet.change >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                      {wallet.change >= 0 ? '+' : ''}{wallet.change}%
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 mb-6">
+                    <p className="text-slate-400 text-sm font-medium">{wallet.name}</p>
+                    <h3 className="text-2xl font-bold text-white">${wallet.balance.toLocaleString()}</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700/50">
+                        <ArrowDownLeft className="w-4 h-4 mr-2 text-emerald-400" />
+                        Deposit
+                    </Button>
+                    <Button className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700/50">
+                        <ArrowUpRight className="w-4 h-4 mr-2 text-red-400" />
+                        Withdraw
+                    </Button>
                   </div>
                 </div>
-              </div>
+                
+                {/* Colored bottom stripe */}
+                <div className={`h-1 w-full ${wallet.color}`}></div>
+              </Card>
+            ))}
+          </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                {wallets.map((wallet, idx) => (
-                  <Card
-                    key={wallet.type}
-                    data-testid={`wallet-card-${wallet.type}`}
-                    className="bg-gray-800 border-gray-700 p-6 hover:border-emerald-500/50 transition-all"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className={`w-14 h-14 rounded-full ${wallet.color} flex items-center justify-center text-white font-bold text-lg`}
-                        >
-                          {wallet.abbreviation}
-                        </div>
-                        <div>
-                          <h3 className="text-white font-semibold text-lg">{wallet.name}</h3>
-                          <p className="text-gray-400 text-sm">Trading Account</p>
-                        </div>
-                      </div>
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
-                        +{wallet.change.toFixed(2)}%
-                      </span>
-                    </div>
-
-                    <div className="space-y-3 mb-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Balance</span>
-                        <span className="text-white font-semibold">${wallet.balance.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Est. Value</span>
-                        <span className="text-emerald-400 font-bold">${wallet.value.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex space-x-2">
-                      <Button
-                        data-testid={`button-deposit-${wallet.type}`}
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                      >
-                        <i className="ri-add-line mr-2"></i>
-                        Deposit
-                      </Button>
-                      <Button
-                        data-testid={`button-withdraw-${wallet.type}`}
-                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-white"
-                      >
-                        <i className="ri-subtract-line mr-2"></i>
-                        Withdraw
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-
-              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-                  <h3 className="text-xl font-semibold text-white mb-3 sm:mb-0">
-                    <i className="ri-exchange-funds-line mr-2 text-emerald-400"></i>
-                    Transfer Between Wallets
-                  </h3>
-                  <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
-                    <DialogTrigger asChild>
-                      <Button
-                        data-testid="button-open-transfer"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                      >
-                        <i className="ri-send-plane-line mr-2"></i>
-                        New Transfer
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-gray-900 border-gray-800">
-                      <DialogHeader>
-                        <DialogTitle className="text-white">Transfer Funds</DialogTitle>
-                        <DialogDescription className="text-gray-400">
-                          Move funds between your trading wallets
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 mt-4">
-                        <div>
-                          <Label htmlFor="from-wallet" className="text-gray-300">
-                            From Wallet
-                          </Label>
-                          <Select value={fromWallet} onValueChange={setFromWallet}>
-                            <SelectTrigger
-                              id="from-wallet"
-                              data-testid="select-from-wallet"
-                              className="bg-gray-800 border-gray-700 text-white"
-                            >
-                              <SelectValue placeholder="Select wallet" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-gray-800 border-gray-700">
-                              <SelectItem value="arb">Arbitrage</SelectItem>
-                              <SelectItem value="forex">Forex</SelectItem>
-                              <SelectItem value="fut">Futures</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label htmlFor="to-wallet" className="text-gray-300">
-                            To Wallet
-                          </Label>
-                          <Select value={toWallet} onValueChange={setToWallet}>
-                            <SelectTrigger
-                              id="to-wallet"
-                              data-testid="select-to-wallet"
-                              className="bg-gray-800 border-gray-700 text-white"
-                            >
-                              <SelectValue placeholder="Select wallet" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-gray-800 border-gray-700">
-                              <SelectItem value="arb">Arbitrage</SelectItem>
-                              <SelectItem value="forex">Forex</SelectItem>
-                              <SelectItem value="fut">Futures</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label htmlFor="amount" className="text-gray-300">
-                            Amount (USDT)
-                          </Label>
-                          <Input
-                            id="amount"
-                            data-testid="input-transfer-amount"
-                            type="number"
-                            placeholder="0.00"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
-                          />
-                        </div>
-
-                        <Button
-                          data-testid="button-confirm-transfer"
-                          onClick={handleTransfer}
-                          disabled={transferMutation.isPending}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                          {transferMutation.isPending ? "Processing..." : "Confirm Transfer"}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-
-                <div className="text-center py-8">
-                  <i className="ri-exchange-funds-line text-4xl text-gray-600 mb-3"></i>
-                  <p className="text-gray-400">Click "New Transfer" to move funds between wallets</p>
-                  <p className="text-gray-500 text-sm mt-1">Transfers are instant and free</p>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </section>
-      </main>
+        </div>
+      </div>
     </Layout>
   );
 }

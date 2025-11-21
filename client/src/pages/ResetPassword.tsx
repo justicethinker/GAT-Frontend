@@ -75,37 +75,46 @@ export default function ResetPassword() {
     }
   };
 
+  // Shared background elements
+  const BackgroundEffects = () => (
+    <>
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none"></div>
+    </>
+  );
+
   if (!otpSent) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-gray-900 border-gray-800">
-          <CardHeader className="space-y-1">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
+        <BackgroundEffects />
+        <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
+          <CardHeader className="space-y-2 pb-6">
             <div className="flex items-center justify-center mb-4">
-              <div className="w-16 h-16 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <i className="ri-lock-password-line text-white text-3xl"></i>
+              <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                <i className="ri-lock-password-line text-emerald-400 text-2xl"></i>
               </div>
             </div>
-            <CardTitle className="text-2xl text-center text-white">Reset Password</CardTitle>
+            <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">Reset Password</CardTitle>
             <CardDescription className="text-center text-gray-400">
               Enter your email to receive a verification code
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmitEmail(onSendOTP)} className="space-y-4">
+            <form onSubmit={handleSubmitEmail(onSendOTP)} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-300">
-                  Email
+                <Label htmlFor="email" className="text-gray-300 text-sm font-medium ml-1">
+                  Email Address
                 </Label>
                 <Input
                   id="email"
                   data-testid="input-email"
                   type="email"
-                  placeholder="your@email.com"
-                  className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                  placeholder="trader@example.com"
+                  className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
                   {...registerEmail("email")}
                 />
                 {emailErrors.email && (
-                  <p className="text-sm text-red-400">{emailErrors.email.message}</p>
+                  <p className="text-xs text-red-400 ml-1">{emailErrors.email.message}</p>
                 )}
               </div>
 
@@ -113,17 +122,22 @@ export default function ResetPassword() {
                 type="submit"
                 data-testid="button-send-otp"
                 disabled={isLoading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 active:translate-y-0"
               >
-                {isLoading ? "Sending..." : "Send Verification Code"}
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Sending Code...</span>
+                  </div>
+                ) : "Send Verification Code"}
               </Button>
 
-              <div className="text-center text-sm text-gray-400">
+              <div className="pt-2 text-center text-sm text-gray-400">
                 Remember your password?{" "}
                 <Link
                   href="/login"
                   data-testid="link-login"
-                  className="text-emerald-400 hover:text-emerald-300"
+                  className="text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4"
                 >
                   Sign in
                 </Link>
@@ -136,40 +150,41 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-gray-900 border-gray-800">
-        <CardHeader className="space-y-1">
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
+      <BackgroundEffects />
+      <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
+        <CardHeader className="space-y-2 pb-6">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-16 h-16 bg-emerald-600 rounded-lg flex items-center justify-center">
-              <i className="ri-lock-password-line text-white text-3xl"></i>
+             <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+              <i className="ri-shield-keyhole-line text-emerald-400 text-2xl"></i>
             </div>
           </div>
-          <CardTitle className="text-2xl text-center text-white">Enter Verification Code</CardTitle>
+          <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">Verify & Reset</CardTitle>
           <CardDescription className="text-center text-gray-400">
-            Check your email for the verification code
+            Check your email for the code
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="otp" className="text-gray-300">
+              <Label htmlFor="otp" className="text-gray-300 text-sm font-medium ml-1">
                 Verification Code
               </Label>
               <Input
                 id="otp"
                 data-testid="input-otp"
                 type="text"
-                placeholder="Enter OTP"
-                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                placeholder="Enter 6-digit code"
+                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all tracking-widest text-center font-mono text-lg"
                 {...register("otp")}
               />
               {errors.otp && (
-                <p className="text-sm text-red-400">{errors.otp.message}</p>
+                <p className="text-xs text-red-400 ml-1">{errors.otp.message}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-300">
+              <Label htmlFor="password" className="text-gray-300 text-sm font-medium ml-1">
                 New Password
               </Label>
               <Input
@@ -177,11 +192,11 @@ export default function ResetPassword() {
                 data-testid="input-password"
                 type="password"
                 placeholder="••••••••"
-                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
                 {...register("password")}
               />
               {errors.password && (
-                <p className="text-sm text-red-400">{errors.password.message}</p>
+                <p className="text-xs text-red-400 ml-1">{errors.password.message}</p>
               )}
             </div>
 
@@ -189,15 +204,20 @@ export default function ResetPassword() {
               type="submit"
               data-testid="button-submit"
               disabled={isLoading}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 active:translate-y-0"
             >
-              {isLoading ? "Resetting..." : "Reset Password"}
+               {isLoading ? (
+                <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Resetting...</span>
+                </div>
+              ) : "Reset Password"}
             </Button>
 
             <button
               type="button"
               onClick={() => setOtpSent(false)}
-              className="w-full text-sm text-emerald-400 hover:text-emerald-300"
+              className="w-full text-sm text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4 pt-2"
             >
               Use a different email
             </button>

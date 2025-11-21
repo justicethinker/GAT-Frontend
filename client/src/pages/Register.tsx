@@ -44,40 +44,45 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-gray-900 border-gray-800">
-        <CardHeader className="space-y-1">
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
+       {/* Background Effects matching Login page */}
+      <div className="absolute top-0 right-1/2 translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none"></div>
+
+      <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
+        <CardHeader className="space-y-2 pb-6">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-16 h-16 bg-emerald-600 rounded-lg flex items-center justify-center">
-              <i className="ri-dashboard-line text-white text-3xl"></i>
+            <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+              <i className="ri-dashboard-line text-emerald-400 text-2xl"></i>
             </div>
           </div>
-          <CardTitle className="text-2xl text-center text-white">Create Account</CardTitle>
+          <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">Create Account</CardTitle>
           <CardDescription className="text-center text-gray-400">
             Join TradePro and start trading today
           </CardDescription>
         </CardHeader>
+        
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-300">
-                Email
+              <Label htmlFor="email" className="text-gray-300 text-sm font-medium ml-1">
+                Email Address
               </Label>
               <Input
                 id="email"
                 data-testid="input-email"
                 type="email"
-                placeholder="your@email.com"
-                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                placeholder="trader@example.com"
+                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
                 {...register("email")}
               />
               {errors.email && (
-                <p className="text-sm text-red-400">{errors.email.message}</p>
+                <p className="text-xs text-red-400 ml-1">{errors.email.message}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-300">
+              <Label htmlFor="password" className="text-gray-300 text-sm font-medium ml-1">
                 Password
               </Label>
               <Input
@@ -85,11 +90,11 @@ export default function Register() {
                 data-testid="input-password"
                 type="password"
                 placeholder="••••••••"
-                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
                 {...register("password")}
               />
               {errors.password && (
-                <p className="text-sm text-red-400">{errors.password.message}</p>
+                <p className="text-xs text-red-400 ml-1">{errors.password.message}</p>
               )}
             </div>
 
@@ -97,17 +102,22 @@ export default function Register() {
               type="submit"
               data-testid="button-submit"
               disabled={isLoading}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 active:translate-y-0"
             >
-              {isLoading ? "Creating account..." : "Create Account"}
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Creating account...</span>
+                </div>
+              ) : "Create Account"}
             </Button>
 
-            <div className="text-center text-sm text-gray-400">
+            <div className="pt-2 text-center text-sm text-gray-400">
               Already have an account?{" "}
               <Link
                 href="/login"
                 data-testid="link-login"
-                className="text-emerald-400 hover:text-emerald-300"
+                className="text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4"
               >
                 Sign in
               </Link>

@@ -2,11 +2,28 @@ import { Link, useLocation } from "wouter";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { 
+  Menu, 
+  X, 
+  Bell, 
+  User, 
+  LogOut, 
+  LayoutDashboard, 
+  ArrowRightLeft, 
+  TrendingUp, 
+  Wallet, 
+  Settings, 
+  ChevronDown,
+  Shield // Added Shield icon for the Admin button
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function Header() {
   const [location] = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
+  
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifMenuRef = useRef<HTMLDivElement>(null);
 
@@ -15,6 +32,7 @@ export function Header() {
     retry: false,
   });
 
+  // Sample notifications logic
   const { data: notifications = [] } = useQuery<Array<{
     id: number;
     action: string;
@@ -25,6 +43,7 @@ export function Header() {
     retry: false,
   });
 
+  // Click outside handler
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
@@ -34,21 +53,14 @@ export function Header() {
         setNotifMenuOpen(false);
       }
     }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setUserMenuOpen(false);
-        setNotifMenuOpen(false);
-      }
-    }
-
     document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -57,11 +69,11 @@ export function Header() {
   };
 
   const navLinks = [
-    { path: "/dashboard", label: "Dashboard", icon: "ri-dashboard-line" },
-    { path: "/arbitrage", label: "Arbitrage", icon: "ri-exchange-line" },
-    { path: "/futures", label: "Futures", icon: "ri-line-chart-line" },
-    { path: "/forex", label: "Forex", icon: "ri-currency-line" },
-    { path: "/wallet", label: "Wallet", icon: "ri-wallet-3-line" },
+    { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { path: "/arbitrage", label: "Arbitrage", icon: ArrowRightLeft },
+    { path: "/futures", label: "Futures", icon: TrendingUp },
+    { path: "/forex", label: "Forex", icon: Wallet },
+    { path: "/wallet", label: "Wallet", icon: Wallet },
   ];
 
   const getInitials = (email?: string) => {
@@ -70,78 +82,89 @@ export function Header() {
   };
 
   return (
-    <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14 sm:h-16">
-          <div className="flex items-center lg:hidden">
+    <header className="bg-slate-950/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          
+          {/* LEFT: Logo & Mobile Menu Toggle */}
+          <div className="flex items-center gap-4">
             <button
-              data-testid="button-mobile-menu"
-              className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden p-2 -ml-2 text-gray-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
             >
-              <i className="ri-menu-line text-xl"></i>
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
+
+            <Link href="/dashboard" className="flex items-center space-x-2 group">
+              <div className="w-9 h-9 bg-emerald-600/10 border border-emerald-500/20 rounded-lg flex items-center justify-center group-hover:bg-emerald-600/20 transition-colors">
+                <LayoutDashboard className="text-emerald-500 w-5 h-5" />
+              </div>
+              <span className="text-white font-bold text-xl tracking-tight hidden sm:block">
+                TradePro
+              </span>
+            </Link>
           </div>
 
-          <Link href="/dashboard" className="flex items-center space-x-2" data-testid="link-home">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
-              <i className="ri-dashboard-line text-white text-lg sm:text-xl"></i>
-            </div>
-            <span className="text-white font-bold text-lg sm:text-xl hidden sm:block">
-              TradePro
-            </span>
-          </Link>
-
-          <nav className="hidden lg:flex space-x-1">
-            {navLinks.map(({ path, label, icon }) => (
-              <Link
-                key={path}
-                href={path}
-                data-testid={`link-${label.toLowerCase()}`}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+          {/* CENTER: Desktop Navigation */}
+          <nav className="hidden lg:flex items-center space-x-1">
+            {navLinks.map(({ path, label, icon: Icon }) => (
+              <Link key={path} href={path}>
+                <span className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   location === path
-                    ? "bg-emerald-600 text-white"
-                    : "text-gray-300 hover:text-white hover:bg-gray-800"
-                }`}
-              >
-                <i className={`${icon} text-base`}></i>
-                <span>{label}</span>
+                    ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}>
+                  <Icon className="w-4 h-4" />
+                  <span>{label}</span>
+                </span>
               </Link>
             ))}
           </nav>
 
-          <div className="flex items-center space-x-2 sm:space-x-4">
+          {/* RIGHT: Notifications, Admin & User Menu */}
+          <div className="flex items-center space-x-3">
+            
+            {/* --- NEW ADMIN BUTTON (Desktop) --- */}
+            <Link href="/admin">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="hidden md:flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <Shield className="w-4 h-4" />
+                <span>Admin</span>
+              </Button>
+            </Link>
+            {/* ---------------------------------- */}
+
+            {/* Notifications Dropdown */}
             <div className="relative" ref={notifMenuRef}>
               <button
-                data-testid="button-notifications"
                 onClick={() => setNotifMenuOpen(!notifMenuOpen)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md relative"
+                className={`p-2.5 rounded-full transition-colors relative ${notifMenuOpen ? "bg-slate-800 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}
               >
-                <i className="ri-notification-3-line text-lg sm:text-xl"></i>
+                <Bell className="w-5 h-5" />
                 {notifications.length > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                  <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-slate-900"></span>
                 )}
               </button>
+
               {notifMenuOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden z-50">
+                <div className="absolute right-0 mt-3 w-80 bg-slate-900 rounded-xl shadow-2xl border border-slate-800 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                  <div className="p-3 border-b border-slate-800 bg-slate-900/50">
+                    <h3 className="text-sm font-semibold text-white">Notifications</h3>
+                  </div>
                   {notifications.length === 0 ? (
-                    <div className="p-4 text-center text-gray-400" data-testid="text-no-notifications">
+                    <div className="p-8 text-center text-slate-500 text-sm">
                       No new notifications
                     </div>
                   ) : (
-                    <div className="max-h-96 overflow-y-auto">
+                    <div className="max-h-[300px] overflow-y-auto no-scrollbar">
                       {notifications.map((notif) => (
-                        <div
-                          key={notif.id}
-                          data-testid={`notification-${notif.id}`}
-                          className="p-4 border-b border-gray-700 last:border-b-0 hover:bg-gray-700 transition-colors"
-                        >
-                          <p className="text-white font-medium">{notif.action}</p>
-                          {notif.details && (
-                            <p className="text-gray-400 text-sm mt-1">{notif.details}</p>
-                          )}
-                          <p className="text-gray-500 text-xs mt-1">
-                            {new Date(notif.created_at).toLocaleString()}
-                          </p>
+                        <div key={notif.id} className="p-3 border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors">
+                          <p className="text-slate-200 text-sm font-medium">{notif.action}</p>
+                          {notif.details && <p className="text-slate-400 text-xs mt-0.5">{notif.details}</p>}
+                          <p className="text-slate-600 text-[10px] mt-1.5">{new Date(notif.created_at).toLocaleString()}</p>
                         </div>
                       ))}
                     </div>
@@ -150,53 +173,41 @@ export function Header() {
               )}
             </div>
 
+            {/* User Dropdown */}
             <div className="relative" ref={userMenuRef}>
               <button
-                data-testid="button-user-menu"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="relative flex items-center space-x-2 p-1 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md focus:outline-none transition-transform"
+                className="flex items-center space-x-2 p-1 pr-2 rounded-full border border-slate-800 hover:bg-slate-800 hover:border-slate-700 transition-all"
               >
-                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-600 rounded-full flex items-center justify-center font-semibold text-sm">
+                <div className="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-emerald-900/20">
                   {getInitials(userInfo?.email)}
                 </div>
-                <span className="text-white text-sm hidden sm:block" data-testid="text-user-email">
-                  {userInfo?.email || "User"}
-                </span>
-                <i
-                  className={`ri-arrow-down-s-line text-white text-sm hidden sm:block transition-transform ${
-                    userMenuOpen ? "rotate-180" : ""
-                  }`}
-                ></i>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`} />
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-50 transform transition-all origin-top-right">
-                  <div className="p-2">
-                    <Link
-                      href="/profile"
-                      data-testid="link-profile"
-                      className="flex items-center space-x-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md"
-                    >
-                      <i className="ri-user-line"></i>
-                      <span>Profile</span>
+                <div className="absolute right-0 mt-3 w-56 bg-slate-900 rounded-xl shadow-2xl border border-slate-800 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                  <div className="p-4 border-b border-slate-800 bg-slate-900/50">
+                    <p className="text-sm font-medium text-white truncate">{userInfo?.email}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Basic Plan</p>
+                  </div>
+                  <div className="p-1">
+                    <Link href="/profile">
+                        <div className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer transition-colors">
+                            <User className="w-4 h-4" /> Profile
+                        </div>
                     </Link>
-
-                    <Link
-                      href="/settings"
-                      data-testid="link-settings"
-                      className="flex items-center space-x-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md"
-                    >
-                      <i className="ri-settings-3-line"></i>
-                      <span>Settings</span>
+                    <Link href="/settings">
+                        <div className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer transition-colors">
+                            <Settings className="w-4 h-4" /> Settings
+                        </div>
                     </Link>
-
+                    <div className="h-px bg-slate-800 my-1" />
                     <button
-                      data-testid="button-logout"
                       onClick={handleLogout}
-                      className="w-full flex items-center space-x-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md"
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                     >
-                      <i className="ri-logout-box-line"></i>
-                      <span>Logout</span>
+                      <LogOut className="w-4 h-4" /> Sign Out
                     </button>
                   </div>
                 </div>
@@ -205,6 +216,55 @@ export function Header() {
           </div>
         </div>
       </div>
+
+      {/* MOBILE NAVIGATION MENU (Slide Down) */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden bg-slate-950 border-b border-slate-800 animate-in slide-in-from-top-5 duration-200">
+          <div className="px-4 py-3 space-y-1">
+            {navLinks.map(({ path, label, icon: Icon }) => (
+              <Link key={path} href={path}>
+                <span className={`flex items-center space-x-3 px-3 py-3 rounded-lg text-base font-medium transition-colors ${
+                  location === path
+                    ? "bg-emerald-600/10 text-emerald-400"
+                    : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                }`}>
+                  <Icon className="w-5 h-5" />
+                  <span>{label}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+          <div className="border-t border-slate-800 p-4">
+             <div className="flex items-center gap-3 mb-4 px-2">
+                <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
+                  {getInitials(userInfo?.email)}
+                </div>
+                <div>
+                    <p className="text-white font-medium text-sm">{userInfo?.email}</p>
+                    <p className="text-slate-500 text-xs">Logged in</p>
+                </div>
+             </div>
+             <div className="grid grid-cols-2 gap-2">
+                {/* --- NEW ADMIN BUTTON (Mobile) --- */}
+                <Link href="/admin" className="col-span-2">
+                    <Button variant="outline" className="w-full border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2">
+                        <Shield className="w-4 h-4" /> Admin Dashboard
+                    </Button>
+                </Link>
+                {/* --------------------------------- */}
+                
+                <Link href="/profile">
+                    <Button variant="outline" className="w-full border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800">
+                        Profile
+                    </Button>
+                </Link>
+                <Button onClick={handleLogout} variant="outline" className="w-full border-red-900/30 text-red-400 hover:bg-red-950/30 hover:text-red-300">
+                    Logout
+                </Button>
+             </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
