@@ -215,6 +215,18 @@ const Switch = ({ checked, onChange }: { checked: boolean; onChange: (val: boole
   </button>
 );
 
+// --- Interfaces ---
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  status: string;
+  balance: string;
+  trades: number;
+  joinDate: string;
+  verified: boolean;
+}
+
 // --- Main Admin Page ---
 
 const Admin = () => {
@@ -222,7 +234,7 @@ const Admin = () => {
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
-  
+   
   // --- Profile Dropdown & Modal State ---
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -256,28 +268,128 @@ const Admin = () => {
   const [timeRange, setTimeRange] = useState("7D");
   const timeFilters = ["24H", "7D", "30D", "90D"];
 
-  // --- User Management State ---
+  // --- User Management State & Logic ---
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [users, setUsers] = useState([
-    { id: 1, name: "John Smith", email: "john.smith@email.com", status: "Active", balance: "$12,450.80", trades: 247, joinDate: "2024-01-15", verified: true },
-    { id: 2, name: "Sarah Johnson", email: "sarah.j@email.com", status: "Active", balance: "$8,920.45", trades: 156, joinDate: "2024-02-03", verified: false },
-    { id: 3, name: "Mike Chen", email: "mike.c@email.com", status: "Pending", balance: "$0.00", trades: 0, joinDate: "2024-03-10", verified: false },
-    { id: 4, name: "Emma Wilson", email: "emma.w@email.com", status: "Suspended", balance: "$450.20", trades: 12, joinDate: "2024-01-20", verified: true },
-  ]);
+  
+  // Replaced mock data with empty initial state
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [userPage, setUserPage] = useState(1);
   const [newUser, setNewUser] = useState({ name: "", email: "", accountId: "" });
 
+  // --- FETCH USERS FROM API ---
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const token = localStorage.getItem("token");
+      const headers = {
+        'Authorization': token ? `Bearer ${token}` : ''
+      };
+
+      // Construct URL params
+      let url = `/admini/dashboard?page=${userPage}`;
+      
+      // If specifically filtering for suspended, pass it to API
+      // The API endpoint definition implies suspended is a specific filter
+      if (filterStatus === "Suspended") {
+        url += `&suspended=true`;
+      }
+
+      const response = await fetch(url, { headers });
+      if (response.ok) {
+        const data = await response.json();
+        // Assuming the API returns an array of users or an object with a 'users' property
+        // Adjust this mapping based on exact API response structure
+        // For now, mapping assuming the response IS the array or contains 'users'
+        const usersData = Array.isArray(data) ? data : (data.users || []);
+        
+        // Map API data to UI User interface if needed (or use directly if matches)
+        // This is a safety mapping
+        const mappedUsers = usersData.map((u: any) => ({
+          id: u.id || u.user_id,
+          name: u.name || u.username || "Unknown",
+          email: u.email || "No Email",
+          status: u.suspended ? "Suspended" : (u.status || "Active"),
+          balance: u.balance ? `$${u.balance}` : "$0.00",
+          trades: u.trades || 0,
+          joinDate: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : "N/A",
+          verified: u.verified || false
+        }));
+        
+        setUsers(mappedUsers);
+      } else {
+        console.error("Failed to fetch users");
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  // Trigger fetch when tab changes to Users, or page/filter changes
+  useEffect(() => {
+    if (activeTab === "Users") {
+      fetchUsers();
+    }
+  }, [activeTab, userPage, filterStatus]);
+
+  // --- SUSPEND USER ACTION ---
+  const handleUserAction = async (userId: number, currentStatus: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      
+      // Determine action based on current status
+      // If currently suspended, we likely want to "activate" (action name depends on backend, assuming 'activate' or 'unsuspend')
+      // If active, we want to 'suspend'
+      const action = currentStatus === "Suspended" ? "activate" : "suspend";
+      
+      // Optimistic UI update (optional, but good UX)
+      const confirmMsg = action === "suspend" ? "Are you sure you want to suspend this user?" : "Activate this user?";
+      if (!window.confirm(confirmMsg)) return;
+
+      const response = await fetch(`/admini/suspend-user?user_id=${userId}&action=${action}`, {
+        method: "GET", // Endpoint was defined as GET in routes.ts/prompt
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : ''
+        }
+      });
+
+      if (response.ok) {
+        // Refresh the list
+        fetchUsers();
+        alert(`User ${action}ed successfully.`);
+      } else {
+        const err = await response.json();
+        alert(`Action failed: ${err.detail || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error executing action:", error);
+      alert("Connection error occurred.");
+    }
+  };
+
+  // Client-side filtering for Search + Statuses not handled by API (like 'Pending')
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
       const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || user.email.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === "All" || user.status === filterStatus;
+      
+      // If API handles 'Suspended' via param, we might already have only suspended users.
+      // But for 'Active' vs 'Pending' (if API returns both), we filter here.
+      let matchesStatus = true;
+      if (filterStatus !== "All" && filterStatus !== "Suspended") {
+          // If we are in "Active" or "Pending" tab, filter client side
+          matchesStatus = user.status === filterStatus;
+      }
+      
       return matchesSearch && matchesStatus;
     });
   }, [users, searchTerm, filterStatus]);
 
   const userStats = {
-    total: users.length,
+    total: users.length, // Ideally fetch from a stats endpoint
     active: users.filter(u => u.status === "Active").length,
     pending: users.filter(u => u.status === "Pending").length,
     suspended: users.filter(u => u.status === "Suspended").length,
@@ -285,7 +397,8 @@ const Admin = () => {
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
-    setUsers([...users, { ...newUser, id: users.length + 1, status: "Pending", balance: "$0.00", trades: 0, joinDate: new Date().toISOString().split('T')[0], verified: false } as any]);
+    // Note: Real implementation would call an API to create user
+    alert("Create User API integration needed here.");
     setIsAddUserOpen(false);
     setNewUser({ name: "", email: "", accountId: "" });
   };
@@ -381,7 +494,7 @@ const Admin = () => {
       alertThreshold: 10000
     }
   });
-  
+   
   const securityLogs = [
     { id: 1, severity: "MEDIUM", event: "Multiple failed login attempts from IP 192.168.1.100", user: "john.smith@email.com", timestamp: "2024-03-15 14:30:25", action: "Account temporarily locked", actionColor: "text-emerald-400" },
     { id: 2, severity: "HIGH", event: "Large withdrawal request detected", user: "sarah.j@email.com", timestamp: "2024-03-15 13:45:12", action: "Manual review required", actionColor: "text-emerald-400" },
@@ -397,7 +510,7 @@ const Admin = () => {
     performance: { caching: true, compression: true, cdn: true, maxUsers: 10000, sessionTimeout: 24 },
     backup: { auto: true, frequency: "Daily", retention: 30 }
   });
-  
+   
   const [backups, setBackups] = useState([
     { id: 1, name: "Full Backup", date: "2024-03-15 02:00:00", size: "2.4 GB", status: "Completed" },
     { id: 2, name: "Incremental", date: "2024-03-14 02:00:00", size: "156 MB", status: "Completed" },
@@ -683,7 +796,7 @@ const Admin = () => {
                     <div className="flex bg-gray-900 p-1 rounded-lg border border-gray-800 self-start md:self-auto">{timeFilters.map((filter) => (<button key={filter} onClick={() => setTimeRange(filter)} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${timeRange === filter ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}>{filter}</button>))}</div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard title="Total Users" value={userStats.total} subValue="+12.5%" icon={Users} colorClass="text-emerald-400" />
+                    <StatCard title="Total Users" value="2,847" subValue="+12.5%" icon={Users} colorClass="text-emerald-400" />
                     <StatCard title="Active Traders" value="1,234" subValue="+8.2%" icon={Activity} colorClass="text-emerald-400" />
                     <StatCard title="Total Volume" value="$24.8M" subValue="+15.7%" icon={BarChart3} colorClass="text-yellow-400" />
                     <StatCard title="Revenue" value="$124.5K" subValue="+22.1%" icon={Wallet} colorClass="text-purple-400" />
@@ -724,12 +837,12 @@ const Admin = () => {
                   <ChartPlaceholder title="User Growth" label="User growth chart" icon={LineChart} color="text-blue-500" />
                 </section>
                 <section>
-                   <h3 className="text-lg font-bold text-white mb-4">Trading Statistics</h3>
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <h3 className="text-lg font-bold text-white mb-4">Trading Statistics</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <TradingStatCard title="Arbitrage Trades" totalTrades="1,247" profit="+$12,847" icon={ArrowUpRight} color="bg-emerald-500" />
                       <TradingStatCard title="Futures Trades" totalTrades="892" profit="+$8,920" icon={TrendingUp} color="bg-blue-500" />
                       <TradingStatCard title="Forex Trades" totalTrades="456" profit="+$4,560" icon={Activity} color="bg-purple-500" />
-                   </div>
+                    </div>
                 </section>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-gray-900 rounded-lg border border-gray-800 p-6"><h3 className="text-lg font-bold text-white mb-6">Recent Activity</h3><div className="space-y-4"><ActivityItem icon={UserIcon} title="New user registered" sub="John Smith" time="2 min ago" color="bg-emerald-500" /><ActivityItem icon={DollarSign} title="Large trade executed: $50,000" sub="Sarah Johnson" time="5 min ago" color="bg-yellow-500" /><ActivityItem icon={Wallet} title="Withdrawal request: $10,000" sub="Mike Chen" time="8 min ago" color="bg-blue-500" /><ActivityItem icon={AlertTriangle} title="High volume detected on BTC/USDT" sub="System Alert" time="12 min ago" color="bg-red-500" /></div></div>
@@ -755,34 +868,109 @@ const Admin = () => {
                   <div className="relative w-full md:w-96"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} /><input type="text" placeholder="Search users by name or email..." className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white focus:border-emerald-500 focus:outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
                   <div className="flex bg-gray-800 rounded-lg p-1">{["All", "Active", "Pending", "Suspended"].map((status) => (<button key={status} onClick={() => setFilterStatus(status)} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${filterStatus === status ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-white"}`}>{status}</button>))}</div>
                 </div>
-                <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden"><div className="overflow-x-auto"><table className="w-full"><thead><tr className="bg-gray-800/50 border-b border-gray-800"><th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">User</th><th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th><th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Balance</th><th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Trades</th><th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Join Date</th><th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th></tr></thead><tbody className="divide-y divide-gray-800">{filteredUsers.map((user) => (<tr key={user.id} className="hover:bg-gray-800/30 transition-colors"><td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center"><div className="h-10 w-10 rounded-full bg-emerald-900/50 text-emerald-500 flex items-center justify-center font-bold border border-emerald-500/20">{user.name.charAt(0)}</div><div className="ml-4"><div className="text-sm font-medium text-white">{user.name}</div><div className="text-sm text-gray-500 flex items-center gap-1">{user.email}{user.verified && <CheckCircle size={12} className="text-emerald-500" />}</div></div></div></td><td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={user.status} /></td><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{user.balance}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{user.trades}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{user.joinDate}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><div className="flex items-center justify-end gap-2"><button className="text-red-400 hover:text-red-300 bg-red-500/10 px-3 py-1 rounded text-xs">Suspend</button><button className="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded text-xs">Edit</button></div></td></tr>))}</tbody></table></div></div>
+                <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-800/50 border-b border-gray-800">
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">User</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Balance</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Trades</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Join Date</th>
+                          <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800">
+                        {isLoadingUsers ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                              <div className="flex justify-center items-center gap-2">
+                                <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                                Loading users...
+                              </div>
+                            </td>
+                          </tr>
+                        ) : filteredUsers.length === 0 ? (
+                          <tr>
+                             <td colSpan={6} className="px-6 py-10 text-center text-gray-400">No users found matching your criteria.</td>
+                          </tr>
+                        ) : (
+                          filteredUsers.map((user) => (
+                          <tr key={user.id} className="hover:bg-gray-800/30 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="h-10 w-10 rounded-full bg-emerald-900/50 text-emerald-500 flex items-center justify-center font-bold border border-emerald-500/20">{user.name.charAt(0)}</div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-white">{user.name}</div>
+                                  <div className="text-sm text-gray-500 flex items-center gap-1">{user.email}{user.verified && <CheckCircle size={12} className="text-emerald-500" />}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={user.status} /></td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{user.balance}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{user.trades}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{user.joinDate}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <div className="flex items-center justify-end gap-2">
+                                <button 
+                                  onClick={() => handleUserAction(user.id, user.status)}
+                                  className={`${user.status === 'Suspended' ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'} hover:opacity-80 px-3 py-1 rounded text-xs`}
+                                >
+                                  {user.status === 'Suspended' ? 'Activate' : 'Suspend'}
+                                </button>
+                                <button className="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded text-xs">Edit</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-4">
+                    <button 
+                        disabled={userPage === 1} 
+                        onClick={() => setUserPage(p => p - 1)}
+                        className="text-xs px-3 py-1 bg-gray-800 rounded disabled:opacity-50 text-gray-300 hover:text-white"
+                    >
+                        Previous
+                    </button>
+                    <span className="text-xs text-gray-500">Page {userPage}</span>
+                    <button 
+                        onClick={() => setUserPage(p => p + 1)}
+                        className="text-xs px-3 py-1 bg-gray-800 rounded text-gray-300 hover:text-white"
+                    >
+                        Next
+                    </button>
+                </div>
               </>
             )}
             
             {/* --- PAYMENT GATEWAY TAB --- */}
             {activeTab === "Payments" && (
               <>
-                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                   <div><h3 className="text-xl font-bold text-white">Payment Gateway Settings</h3><p className="text-sm text-gray-400">Configure payment methods and wallet addresses</p></div>
-                   <button onClick={handleSaveSettings} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-emerald-900/20"><Save size={18} /> Save All Settings</button>
-                 </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                   <StatCard title="Total Volume" value="$2.4M" subValue="+12.5%" icon={DollarSign} colorClass="text-emerald-400" />
-                   <StatCard title="Successful" value="1,247" subValue="+8.2%" icon={CheckCircle} colorClass="text-emerald-400" />
-                   <StatCard title="Failed Transactions" value="23" subValue="-15.3%" icon={X} colorClass="text-red-400" />
-                   <StatCard title="Pending Proofs" value="12" subValue="+5.1%" icon={AlertTriangle} colorClass="text-yellow-400" />
-                 </div>
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                   <div onClick={() => setActiveGateway('stripe')} className={`p-6 rounded-lg border cursor-pointer transition-all ${activeGateway === 'stripe' ? 'bg-gray-800 border-emerald-500 ring-1 ring-emerald-500' : 'bg-gray-900 border-gray-800 hover:bg-gray-800'}`}><div className="flex justify-between items-start mb-4"><div className="bg-blue-600/20 p-2 rounded-lg"><CreditCard className="text-blue-500" size={24} /></div><span className={`text-xs font-medium px-2 py-1 rounded ${gateways.stripe.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-700 text-gray-400'}`}>{gateways.stripe.enabled ? 'Enabled' : 'Disabled'}</span></div><h4 className="text-lg font-bold text-white">Stripe</h4><p className="text-sm text-gray-400 mt-1">Credit/Debit Card payments</p></div>
-                   <div onClick={() => setActiveGateway('paypal')} className={`p-6 rounded-lg border cursor-pointer transition-all ${activeGateway === 'paypal' ? 'bg-gray-800 border-emerald-500 ring-1 ring-emerald-500' : 'bg-gray-900 border-gray-800 hover:bg-gray-800'}`}><div className="flex justify-between items-start mb-4"><div className="bg-blue-400/20 p-2 rounded-lg"><CreditCard className="text-blue-400" size={24} /></div><span className={`text-xs font-medium px-2 py-1 rounded ${gateways.paypal.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-700 text-gray-400'}`}>{gateways.paypal.enabled ? 'Enabled' : 'Disabled'}</span></div><h4 className="text-lg font-bold text-white">PayPal</h4><p className="text-sm text-gray-400 mt-1">PayPal account payments</p></div>
-                   <div onClick={() => setActiveGateway('crypto')} className={`p-6 rounded-lg border cursor-pointer transition-all ${activeGateway === 'crypto' ? 'bg-gray-800 border-emerald-500 ring-1 ring-emerald-500' : 'bg-gray-900 border-gray-800 hover:bg-gray-800'}`}><div className="flex justify-between items-start mb-4"><div className="bg-orange-500/20 p-2 rounded-lg"><Coins className="text-orange-500" size={24} /></div><span className={`text-xs font-medium px-2 py-1 rounded ${gateways.crypto.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-700 text-gray-400'}`}>{gateways.crypto.enabled ? 'Enabled' : 'Disabled'}</span></div><h4 className="text-lg font-bold text-white">Cryptocurrency</h4><p className="text-sm text-gray-400 mt-1">BTC, ETH, USDT, and more</p></div>
-                 </div>
-                 <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
-                   {activeGateway === 'stripe' && (<div className="space-y-6"><div className="flex items-center justify-between border-b border-gray-800 pb-4"><div><h3 className="text-lg font-bold text-white">Stripe Configuration</h3></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">Enable Stripe</span><Switch checked={gateways.stripe.enabled} onChange={(v) => setGateways({...gateways, stripe: {...gateways.stripe, enabled: v}})} /></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-gray-400 mb-2">Public Key</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" defaultValue={gateways.stripe.publicKey} /></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Secret Key</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" placeholder="sk_test_..." /></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Webhook Secret</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" placeholder="whsec_..." /></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Default Currency</label><div className="flex gap-2"><select className="flex-1 bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none">{currencies.map(c => <option key={c}>{c}</option>)}</select><div className="relative group"><input type="text" placeholder="Add" className="w-20 bg-gray-800 border border-gray-700 rounded-l p-2 text-white text-sm focus:border-emerald-500 outline-none" value={newCurrency} onChange={e => setNewCurrency(e.target.value.toUpperCase())} /><button onClick={handleAddCurrency} className="absolute right-0 top-0 h-full px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-r"><Plus size={14} /></button></div></div></div></div></div>)}
-                   {activeGateway === 'paypal' && (<div className="space-y-6"><div className="flex items-center justify-between border-b border-gray-800 pb-4"><div><h3 className="text-lg font-bold text-white">PayPal Configuration</h3></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">Enable PayPal</span><Switch checked={gateways.paypal.enabled} onChange={(v) => setGateways({...gateways, paypal: {...gateways.paypal, enabled: v}})} /></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-gray-400 mb-2">Client ID</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" placeholder="Enter Client ID" /></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Client Secret</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" placeholder="Enter Client Secret" /></div><div className="md:col-span-2"><label className="block text-sm font-medium text-gray-400 mb-2">Environment</label><select className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none"><option>Sandbox</option><option>Production</option></select></div></div></div>)}
-                   {activeGateway === 'crypto' && (<div className="space-y-6"><div className="flex items-center justify-between border-b border-gray-800 pb-4"><div><h3 className="text-lg font-bold text-white">Cryptocurrency Configuration</h3></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">Enable Cryptocurrency</span><Switch checked={gateways.crypto.enabled} onChange={(v) => setGateways({...gateways, crypto: {...gateways.crypto, enabled: v}})} /></div></div><div className="flex gap-4 border-b border-gray-800"><button onClick={() => setCryptoTab('wallets')} className={`pb-2 px-1 text-sm font-medium transition-colors ${cryptoTab === 'wallets' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-white'}`}>Wallet Addresses</button><button onClick={() => setCryptoTab('proofs')} className={`pb-2 px-1 text-sm font-medium transition-colors ${cryptoTab === 'proofs' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-white'}`}>Payment Proofs</button></div>{cryptoTab === 'wallets' && (<><div className="flex justify-between items-center"><h4 className="text-white font-bold">Manage Wallet Addresses</h4><button onClick={() => setIsAddWalletOpen(true)} className="text-xs bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded border border-gray-700 flex items-center gap-1"><Plus size={14} /> Add Wallet</button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{wallets.map(wallet => (<div key={wallet.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 relative group"><div className="flex items-center gap-3 mb-4"><div className={`w-10 h-10 rounded-full ${wallet.color} flex items-center justify-center text-white font-bold`}>{wallet.name[0]}</div><div><h5 className="text-white font-medium">{wallet.name}</h5><span className="text-xs text-gray-400">{wallet.network}</span></div></div><div className="bg-gray-900 p-2 rounded border border-gray-800 mb-2"><p className="text-xs text-gray-400 break-all font-mono">{wallet.address}</p></div><div className="flex justify-center py-2"><div className="bg-white p-1 rounded"><QrCode size={64} className="text-black" /></div></div><button className="absolute top-2 right-2 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button></div>))}</div></>)}{cryptoTab === 'proofs' && (<><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-400 uppercase bg-gray-800/50"><tr><th className="px-4 py-3">Proof ID</th><th className="px-4 py-3">User</th><th className="px-4 py-3">Crypto</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Actions</th></tr></thead><tbody className="divide-y divide-gray-800">{paymentProofs.map(proof => (<tr key={proof.id} className="hover:bg-gray-800/30"><td className="px-4 py-3 font-medium text-white">{proof.id}</td><td className="px-4 py-3 text-gray-300">{proof.user}</td><td className="px-4 py-3 text-gray-300">{proof.crypto}</td><td className="px-4 py-3 text-emerald-400">{proof.amount}</td><td className="px-4 py-3"><StatusBadge status={proof.status} /></td><td className="px-4 py-3 text-gray-500">{proof.date}</td><td className="px-4 py-3"><div className="flex gap-2"><button className="px-2 py-1 bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30 rounded text-xs font-medium">Approve</button><button className="px-2 py-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 rounded text-xs font-medium">Reject</button><button className="px-2 py-1 bg-blue-500/20 text-blue-500 hover:bg-blue-500/30 rounded text-xs font-medium">View</button></div></td></tr>))}</tbody></table></div><div className="mt-4 pt-4 border-t border-gray-800"><h4 className="text-sm font-medium text-gray-400 mb-3">Supported Networks</h4><div className="flex gap-2 mb-6">{["BTC", "ETH", "USDT", "BNB", "ADA", "SOL"].map(net => (<button key={net} className="px-4 py-2 bg-gray-800 border border-gray-700 hover:border-emerald-500 rounded text-sm text-gray-300 hover:text-white transition-all">{net}</button>))}</div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500 mb-1 block">Minimum Deposit ($)</label><input type="number" defaultValue={10} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm" /></div><div><label className="text-xs text-gray-500 mb-1 block">Maximum Deposit ($)</label><input type="number" defaultValue={50000} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm" /></div></div></div></>)}</div>)}
-                 </div>
-                 <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden"><div className="p-4 flex justify-between items-center border-b border-gray-800"><h3 className="text-lg font-bold text-white">Recent Transactions</h3><button className="text-sm text-emerald-500 hover:text-emerald-400 flex items-center gap-1"><ArrowUpRight size={14} /> View All Transactions</button></div><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-400 uppercase bg-gray-800/50"><tr><th className="px-6 py-3">Transaction ID</th><th className="px-6 py-3">User</th><th className="px-6 py-3">Type</th><th className="px-6 py-3">Method</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Fee</th><th className="px-6 py-3">Status</th><th className="px-6 py-3">Date</th><th className="px-6 py-3">Proof</th></tr></thead><tbody className="divide-y divide-gray-800">{recentTransactions.map(tx => (<tr key={tx.id} className="hover:bg-gray-800/30"><td className="px-6 py-4 font-medium text-white">{tx.id}</td><td className="px-6 py-4 text-gray-300">{tx.user}</td><td className="px-6 py-4 text-gray-400">{tx.type}</td><td className="px-6 py-4 text-gray-300">{tx.method}</td><td className="px-6 py-4 text-emerald-400 font-medium">{tx.amount}</td><td className="px-6 py-4 text-gray-400">{tx.fee}</td><td className="px-6 py-4"><StatusBadge status={tx.status} /></td><td className="px-6 py-4 text-gray-500">{tx.date}</td><td className="px-6 py-4">{tx.proof ? <button className="text-blue-400 hover:text-blue-300 text-xs">View Proof</button> : <span className="text-gray-600 text-xs">N/A</span>}</td></tr>))}</tbody></table></div></div>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div><h3 className="text-xl font-bold text-white">Payment Gateway Settings</h3><p className="text-sm text-gray-400">Configure payment methods and wallet addresses</p></div>
+                    <button onClick={handleSaveSettings} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-emerald-900/20"><Save size={18} /> Save All Settings</button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard title="Total Volume" value="$2.4M" subValue="+12.5%" icon={DollarSign} colorClass="text-emerald-400" />
+                    <StatCard title="Successful" value="1,247" subValue="+8.2%" icon={CheckCircle} colorClass="text-emerald-400" />
+                    <StatCard title="Failed Transactions" value="23" subValue="-15.3%" icon={X} colorClass="text-red-400" />
+                    <StatCard title="Pending Proofs" value="12" subValue="+5.1%" icon={AlertTriangle} colorClass="text-yellow-400" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div onClick={() => setActiveGateway('stripe')} className={`p-6 rounded-lg border cursor-pointer transition-all ${activeGateway === 'stripe' ? 'bg-gray-800 border-emerald-500 ring-1 ring-emerald-500' : 'bg-gray-900 border-gray-800 hover:bg-gray-800'}`}><div className="flex justify-between items-start mb-4"><div className="bg-blue-600/20 p-2 rounded-lg"><CreditCard className="text-blue-500" size={24} /></div><span className={`text-xs font-medium px-2 py-1 rounded ${gateways.stripe.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-700 text-gray-400'}`}>{gateways.stripe.enabled ? 'Enabled' : 'Disabled'}</span></div><h4 className="text-lg font-bold text-white">Stripe</h4><p className="text-sm text-gray-400 mt-1">Credit/Debit Card payments</p></div>
+                    <div onClick={() => setActiveGateway('paypal')} className={`p-6 rounded-lg border cursor-pointer transition-all ${activeGateway === 'paypal' ? 'bg-gray-800 border-emerald-500 ring-1 ring-emerald-500' : 'bg-gray-900 border-gray-800 hover:bg-gray-800'}`}><div className="flex justify-between items-start mb-4"><div className="bg-blue-400/20 p-2 rounded-lg"><CreditCard className="text-blue-400" size={24} /></div><span className={`text-xs font-medium px-2 py-1 rounded ${gateways.paypal.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-700 text-gray-400'}`}>{gateways.paypal.enabled ? 'Enabled' : 'Disabled'}</span></div><h4 className="text-lg font-bold text-white">PayPal</h4><p className="text-sm text-gray-400 mt-1">PayPal account payments</p></div>
+                    <div onClick={() => setActiveGateway('crypto')} className={`p-6 rounded-lg border cursor-pointer transition-all ${activeGateway === 'crypto' ? 'bg-gray-800 border-emerald-500 ring-1 ring-emerald-500' : 'bg-gray-900 border-gray-800 hover:bg-gray-800'}`}><div className="flex justify-between items-start mb-4"><div className="bg-orange-500/20 p-2 rounded-lg"><Coins className="text-orange-500" size={24} /></div><span className={`text-xs font-medium px-2 py-1 rounded ${gateways.crypto.enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-700 text-gray-400'}`}>{gateways.crypto.enabled ? 'Enabled' : 'Disabled'}</span></div><h4 className="text-lg font-bold text-white">Cryptocurrency</h4><p className="text-sm text-gray-400 mt-1">BTC, ETH, USDT, and more</p></div>
+                  </div>
+                  <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
+                    {activeGateway === 'stripe' && (<div className="space-y-6"><div className="flex items-center justify-between border-b border-gray-800 pb-4"><div><h3 className="text-lg font-bold text-white">Stripe Configuration</h3></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">Enable Stripe</span><Switch checked={gateways.stripe.enabled} onChange={(v) => setGateways({...gateways, stripe: {...gateways.stripe, enabled: v}})} /></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-gray-400 mb-2">Public Key</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" defaultValue={gateways.stripe.publicKey} /></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Secret Key</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" placeholder="sk_test_..." /></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Webhook Secret</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" placeholder="whsec_..." /></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Default Currency</label><div className="flex gap-2"><select className="flex-1 bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none">{currencies.map(c => <option key={c}>{c}</option>)}</select><div className="relative group"><input type="text" placeholder="Add" className="w-20 bg-gray-800 border border-gray-700 rounded-l p-2 text-white text-sm focus:border-emerald-500 outline-none" value={newCurrency} onChange={e => setNewCurrency(e.target.value.toUpperCase())} /><button onClick={handleAddCurrency} className="absolute right-0 top-0 h-full px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-r"><Plus size={14} /></button></div></div></div></div></div>)}
+                    {activeGateway === 'paypal' && (<div className="space-y-6"><div className="flex items-center justify-between border-b border-gray-800 pb-4"><div><h3 className="text-lg font-bold text-white">PayPal Configuration</h3></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">Enable PayPal</span><Switch checked={gateways.paypal.enabled} onChange={(v) => setGateways({...gateways, paypal: {...gateways.paypal, enabled: v}})} /></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-gray-400 mb-2">Client ID</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" placeholder="Enter Client ID" /></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Client Secret</label><input type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none" placeholder="Enter Client Secret" /></div><div className="md:col-span-2"><label className="block text-sm font-medium text-gray-400 mb-2">Environment</label><select className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 outline-none"><option>Sandbox</option><option>Production</option></select></div></div></div>)}
+                    {activeGateway === 'crypto' && (<div className="space-y-6"><div className="flex items-center justify-between border-b border-gray-800 pb-4"><div><h3 className="text-lg font-bold text-white">Cryptocurrency Configuration</h3></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">Enable Cryptocurrency</span><Switch checked={gateways.crypto.enabled} onChange={(v) => setGateways({...gateways, crypto: {...gateways.crypto, enabled: v}})} /></div></div><div className="flex gap-4 border-b border-gray-800"><button onClick={() => setCryptoTab('wallets')} className={`pb-2 px-1 text-sm font-medium transition-colors ${cryptoTab === 'wallets' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-white'}`}>Wallet Addresses</button><button onClick={() => setCryptoTab('proofs')} className={`pb-2 px-1 text-sm font-medium transition-colors ${cryptoTab === 'proofs' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-white'}`}>Payment Proofs</button></div>{cryptoTab === 'wallets' && (<><div className="flex justify-between items-center"><h4 className="text-white font-bold">Manage Wallet Addresses</h4><button onClick={() => setIsAddWalletOpen(true)} className="text-xs bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded border border-gray-700 flex items-center gap-1"><Plus size={14} /> Add Wallet</button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{wallets.map(wallet => (<div key={wallet.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 relative group"><div className="flex items-center gap-3 mb-4"><div className={`w-10 h-10 rounded-full ${wallet.color} flex items-center justify-center text-white font-bold`}>{wallet.name[0]}</div><div><h5 className="text-white font-medium">{wallet.name}</h5><span className="text-xs text-gray-400">{wallet.network}</span></div></div><div className="bg-gray-900 p-2 rounded border border-gray-800 mb-2"><p className="text-xs text-gray-400 break-all font-mono">{wallet.address}</p></div><div className="flex justify-center py-2"><div className="bg-white p-1 rounded"><QrCode size={64} className="text-black" /></div></div><button className="absolute top-2 right-2 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button></div>))}</div></>)}{cryptoTab === 'proofs' && (<><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-400 uppercase bg-gray-800/50"><tr><th className="px-4 py-3">Proof ID</th><th className="px-4 py-3">User</th><th className="px-4 py-3">Crypto</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Actions</th></tr></thead><tbody className="divide-y divide-gray-800">{paymentProofs.map(proof => (<tr key={proof.id} className="hover:bg-gray-800/30"><td className="px-4 py-3 font-medium text-white">{proof.id}</td><td className="px-4 py-3 text-gray-300">{proof.user}</td><td className="px-4 py-3 text-gray-300">{proof.crypto}</td><td className="px-4 py-3 text-emerald-400">{proof.amount}</td><td className="px-4 py-3"><StatusBadge status={proof.status} /></td><td className="px-4 py-3 text-gray-500">{proof.date}</td><td className="px-4 py-3"><div className="flex gap-2"><button className="px-2 py-1 bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30 rounded text-xs font-medium">Approve</button><button className="px-2 py-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 rounded text-xs font-medium">Reject</button><button className="px-2 py-1 bg-blue-500/20 text-blue-500 hover:bg-blue-500/30 rounded text-xs font-medium">View</button></div></td></tr>))}</tbody></table></div><div className="mt-4 pt-4 border-t border-gray-800"><h4 className="text-sm font-medium text-gray-400 mb-3">Supported Networks</h4><div className="flex gap-2 mb-6">{["BTC", "ETH", "USDT", "BNB", "ADA", "SOL"].map(net => (<button key={net} className="px-4 py-2 bg-gray-800 border border-gray-700 hover:border-emerald-500 rounded text-sm text-gray-300 hover:text-white transition-all">{net}</button>))}</div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500 mb-1 block">Minimum Deposit ($)</label><input type="number" defaultValue={10} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm" /></div><div><label className="text-xs text-gray-500 mb-1 block">Maximum Deposit ($)</label><input type="number" defaultValue={50000} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm" /></div></div></div></>)}</div>)}
+                  </div>
+                  <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden"><div className="p-4 flex justify-between items-center border-b border-gray-800"><h3 className="text-lg font-bold text-white">Recent Transactions</h3><button className="text-sm text-emerald-500 hover:text-emerald-400 flex items-center gap-1"><ArrowUpRight size={14} /> View All Transactions</button></div><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-400 uppercase bg-gray-800/50"><tr><th className="px-6 py-3">Transaction ID</th><th className="px-6 py-3">User</th><th className="px-6 py-3">Type</th><th className="px-6 py-3">Method</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Fee</th><th className="px-6 py-3">Status</th><th className="px-6 py-3">Date</th><th className="px-6 py-3">Proof</th></tr></thead><tbody className="divide-y divide-gray-800">{recentTransactions.map(tx => (<tr key={tx.id} className="hover:bg-gray-800/30"><td className="px-6 py-4 font-medium text-white">{tx.id}</td><td className="px-6 py-4 text-gray-300">{tx.user}</td><td className="px-6 py-4 text-gray-400">{tx.type}</td><td className="px-6 py-4 text-gray-300">{tx.method}</td><td className="px-6 py-4 text-emerald-400 font-medium">{tx.amount}</td><td className="px-6 py-4 text-gray-400">{tx.fee}</td><td className="px-6 py-4"><StatusBadge status={tx.status} /></td><td className="px-6 py-4 text-gray-500">{tx.date}</td><td className="px-6 py-4">{tx.proof ? <button className="text-blue-400 hover:text-blue-300 text-xs">View Proof</button> : <span className="text-gray-600 text-xs">N/A</span>}</td></tr>))}</tbody></table></div></div>
               </>
             )}
             
@@ -826,14 +1014,14 @@ const Admin = () => {
                     )}
                     {tradingTab === "Futures" && (
                       <div className="space-y-6">
-                         <div className="flex items-center justify-between"><div><h4 className="text-lg font-bold text-white">Futures Trading</h4><p className="text-sm text-gray-400">Configure leverage and margin requirements</p></div><Switch checked={tradingConfig.futures.enabled} onChange={v => setTradingConfig({...tradingConfig, futures: {...tradingConfig.futures, enabled: v}})} /></div>
+                          <div className="flex items-center justify-between"><div><h4 className="text-lg font-bold text-white">Futures Trading</h4><p className="text-sm text-gray-400">Configure leverage and margin requirements</p></div><Switch checked={tradingConfig.futures.enabled} onChange={v => setTradingConfig({...tradingConfig, futures: {...tradingConfig.futures, enabled: v}})} /></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-gray-400 mb-2">Maximum Leverage</label><select className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" value={tradingConfig.futures.leverage} onChange={e => setTradingConfig({...tradingConfig, futures: {...tradingConfig.futures, leverage: e.target.value}})}>{["5x", "10x", "20x", "50x", "100x", "125x"].map(x => <option key={x} value={x}>{x}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Margin Requirement (%)</label><input type="number" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" value={tradingConfig.futures.margin} onChange={e => setTradingConfig({...tradingConfig, futures: {...tradingConfig.futures, margin: parseFloat(e.target.value)}})} /></div><div className="md:col-span-1"><label className="block text-sm font-medium text-gray-400 mb-2">Liquidation Threshold (%)</label><input type="number" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" value={tradingConfig.futures.liquidation} onChange={e => setTradingConfig({...tradingConfig, futures: {...tradingConfig.futures, liquidation: parseFloat(e.target.value)}})} /></div></div>
                         <div><label className="block text-sm font-medium text-gray-400 mb-3">Allowed Trading Pairs</label><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{allPairs.map(pair => (<button key={pair} onClick={() => toggleItem('futures', 'pairs', pair)} className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${tradingConfig.futures.pairs.includes(pair) ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500' : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'}`}>{pair}</button>))}</div></div>
                       </div>
                     )}
                     {tradingTab === "Forex" && (
                       <div className="space-y-6">
-                         <div className="flex items-center justify-between"><div><h4 className="text-lg font-bold text-white">Forex Trading</h4><p className="text-sm text-gray-400">Configure forex trading parameters and sessions</p></div><Switch checked={tradingConfig.forex.enabled} onChange={v => setTradingConfig({...tradingConfig, forex: {...tradingConfig.forex, enabled: v}})} /></div>
+                          <div className="flex items-center justify-between"><div><h4 className="text-lg font-bold text-white">Forex Trading</h4><p className="text-sm text-gray-400">Configure forex trading parameters and sessions</p></div><Switch checked={tradingConfig.forex.enabled} onChange={v => setTradingConfig({...tradingConfig, forex: {...tradingConfig.forex, enabled: v}})} /></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-gray-400 mb-2">Maximum Leverage</label><select className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" value={tradingConfig.forex.leverage} onChange={e => setTradingConfig({...tradingConfig, forex: {...tradingConfig.forex, leverage: e.target.value}})}>{["50:1", "100:1", "200:1", "500:1"].map(x => <option key={x} value={x}>{x}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-400 mb-2">Spread Markup (pips)</label><input type="number" className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none" value={tradingConfig.forex.spread} onChange={e => setTradingConfig({...tradingConfig, forex: {...tradingConfig.forex, spread: parseFloat(e.target.value)}})} /></div></div>
                         <div><h5 className="text-sm font-medium text-gray-400 mb-4">Trading Sessions</h5><div className="space-y-4">{Object.entries(tradingConfig.forex.sessions).map(([session, times]) => (<div key={session} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"><div className="text-white font-medium capitalize pb-2 md:pb-0">{session} Session</div><div><label className="text-xs text-gray-500 mb-1 block">Start Time</label><div className="relative"><Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="time" className="w-full bg-gray-800 border border-gray-700 rounded p-2 pl-10 text-white text-sm focus:border-emerald-500 outline-none" value={times.start} onChange={(e) => { const newSessions = {...tradingConfig.forex.sessions, [session]: {...times, start: e.target.value}}; setTradingConfig({...tradingConfig, forex: {...tradingConfig.forex, sessions: newSessions}}); }} /></div></div><div><label className="text-xs text-gray-500 mb-1 block">End Time</label><div className="relative"><Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="time" className="w-full bg-gray-800 border border-gray-700 rounded p-2 pl-10 text-white text-sm focus:border-emerald-500 outline-none" value={times.end} onChange={(e) => { const newSessions = {...tradingConfig.forex.sessions, [session]: {...times, end: e.target.value}}; setTradingConfig({...tradingConfig, forex: {...tradingConfig.forex, sessions: newSessions}}); }} /></div></div></div>))}</div></div>
                       </div>

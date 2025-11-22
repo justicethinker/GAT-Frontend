@@ -14,7 +14,7 @@ import {
   Wallet, 
   Settings, 
   ChevronDown,
-  Shield // Added Shield icon for the Admin button
+  Shield 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -66,6 +66,15 @@ export function Header() {
     localStorage.removeItem("token");
     queryClient.clear();
     window.location.href = "/login";
+  };
+
+  // Helper to trigger the global admin gate from App.tsx
+  const handleAdminClick = () => {
+    // @ts-ignore - window.goToAdmin is defined in App.tsx
+    if (window.goToAdmin) {
+      // @ts-ignore
+      window.goToAdmin();
+    }
   };
 
   const navLinks = [
@@ -125,16 +134,16 @@ export function Header() {
           <div className="flex items-center space-x-3">
             
             {/* --- NEW ADMIN BUTTON (Desktop) --- */}
-            <Link href="/admin">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="hidden md:flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800"
-              >
-                <Shield className="w-4 h-4" />
-                <span>Admin</span>
-              </Button>
-            </Link>
+            {/* Changed from Link to Button with onClick */}
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleAdminClick}
+              className="hidden md:flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <Shield className="w-4 h-4" />
+              <span>Admin</span>
+            </Button>
             {/* ---------------------------------- */}
 
             {/* Notifications Dropdown */}
@@ -245,12 +254,19 @@ export function Header() {
                 </div>
              </div>
              <div className="grid grid-cols-2 gap-2">
+                
                 {/* --- NEW ADMIN BUTTON (Mobile) --- */}
-                <Link href="/admin" className="col-span-2">
-                    <Button variant="outline" className="w-full border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2">
-                        <Shield className="w-4 h-4" /> Admin Dashboard
-                    </Button>
-                </Link>
+                {/* Changed from Link to Button with onClick */}
+                <Button 
+                    variant="outline" 
+                    className="col-span-2 w-full border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2"
+                    onClick={() => {
+                        handleAdminClick();
+                        setMobileMenuOpen(false);
+                    }}
+                >
+                    <Shield className="w-4 h-4" /> Admin Dashboard
+                </Button>
                 {/* --------------------------------- */}
                 
                 <Link href="/profile">

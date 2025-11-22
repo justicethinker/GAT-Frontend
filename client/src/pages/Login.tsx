@@ -6,14 +6,26 @@ import { loginSchema, type LoginInput } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
+  const [adminId, setAdminId] = useState("");
   const { toast } = useToast();
+
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  // CHANGE THIS TO YOUR REAL SECRET ADMIN ID (keep it secret!)
+  const CORRECT_ADMIN_ID = "gatadmin2025"; // ← change this!
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 
   const {
     register,
@@ -30,15 +42,29 @@ export default function Login() {
       formData.append("email", data.email);
       formData.append("password", data.password);
 
+      // We send the adminId to the backend too (in case you later want server-side validation)
+      if (adminId.trim()) {
+        formData.append("adminId", adminId.trim());
+      }
+
       const response = await apiRequest("POST", "/auth/token", formData.toString());
-      
+
       if (response.access_token) {
         localStorage.setItem("token", response.access_token);
+
+        // Determine if this is an admin login
+        const isAdmin = adminId.trim() === CORRECT_ADMIN_ID;
+
+        // Store the flag so your admin page (or layout) can protect the route
+        localStorage.setItem("isAdmin", isAdmin ? "true" : "false");
+
         toast({
           title: "Success",
           description: "Logged in successfully!",
         });
-        setLocation("/dashboard");
+
+        // Redirect: correct admin ID → /admin, otherwise → normal dashboard
+        setLocation(isAdmin ? "/admin" : "/dashboard");
       }
     } catch (error: any) {
       toast({
@@ -53,26 +79,28 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
-      
-      {/* Background Effects for that "Pro" look */}
+      {/* Background Effects */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none"></div>
 
-      <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
+      <Card className="w-full max-w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
         <CardHeader className="space-y-2 pb-6">
           <div className="flex items-center justify-center mb-4">
             <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
               <i className="ri-dashboard-line text-emerald-400 text-2xl"></i>
             </div>
           </div>
-          <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">Welcome Back</CardTitle>
+          <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">
+            Welcome Back
+          </CardTitle>
           <CardDescription className="text-center text-gray-400">
             Sign in to access your TradePro dashboard
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-gray-300 text-sm font-medium ml-1">
                 Email Address
@@ -90,17 +118,14 @@ export default function Login() {
               )}
             </div>
 
+            {/* Password */}
             <div className="space-y-2">
               <div className="flex items-center justify-between ml-1">
                 <Label htmlFor="password" className="text-gray-300 text-sm font-medium">
-                    Password
+                  Password
                 </Label>
-                <Link
-                    href="/reset-password"
-                    data-testid="link-forgot-password"
-                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-                >
-                    Forgot password?
+                <Link href="/reset-password" data-testid="link-forgot-password" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                  Forgot password?
                 </Link>
               </div>
               <Input
@@ -116,6 +141,24 @@ export default function Login() {
               )}
             </div>
 
+            {/* ←←←←← NEW ADMIN ID FIELD ←←←←← */}
+            <div className="space-y-2">
+              <Label htmlFor="adminId" className="text-gray-300 text-sm font-medium ml-1">
+                Admin ID <span className="text-gray-500 font-normal">(optional - admin only)</span>
+              </Label>
+              <Input
+                id="adminId"
+                type="text"
+                placeholder="Enter admin ID for admin access"
+                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
+                value={adminId}
+                onChange={(e) => setAdminId(e.target.value)}
+              />
+              <p className="text-xs text-gray-500 ml-1">
+                Only required for admin dashboard access
+              </p>
+            </div>
+
             <Button
               type="submit"
               data-testid="button-submit"
@@ -124,8 +167,8 @@ export default function Login() {
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Signing in...</span>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Signing in...</span>
                 </div>
               ) : "Sign In"}
             </Button>

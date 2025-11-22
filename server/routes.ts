@@ -2,6 +2,12 @@ import type { Express } from "express";
 
 const API_BASE_URL = "https://gat-zm1r.onrender.com";
 
+// ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+// ADD THIS TO YOUR .env FILE (or hosting environment variables):
+// ADMIN_ID=your-super-secret-admin-id-here-2025
+// ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+const ADMIN_ID = process.env.ADMIN_ID ?? "tradeproadmin2025"; // fallback for local dev only → change or remove!
+
 async function proxyRequest(
   url: string,
   method: string,
@@ -59,20 +65,36 @@ export async function registerRoutes(app: Express): Promise<Express> {
 
   app.post("/auth/token", async (req, res) => {
     try {
-      const formData = new URLSearchParams();
-      const body = req.body as { email?: string, password?: string }; 
+      // Now we accept optional adminId from the frontend
+      const { email, password, adminId } = req.body as { 
+        email?: string; 
+        password?: string; 
+        adminId?: string 
+      }; 
       
-      if (body.email) formData.append("email", body.email);
-      if (body.password) formData.append("password", body.password);
-
-      if (!formData.get('email') || !formData.get('password')) {
+      if (!email || !password) {
         return res.status(400).json({ detail: "Missing email or password" });
       }
+
+      const formData = new URLSearchParams();
+      formData.append("email", email);
+      formData.append("password", password);
+      // We DO NOT forward adminId to the real backend → keeps the secret safe on this proxy layer
 
       const result = await proxyRequest("/auth/token", "POST", formData);
 
       if (result.ok) {
-        res.json(result.data);
+        const responseData: any = { ...result.data }; // copy so we can safely add property
+
+        // Only grant admin flag if the correct admin ID was provided
+        if (adminId && adminId === ADMIN_ID) {
+          responseData.isAdmin = true;
+        } else {
+          responseData.isAdmin = false; // explicit (in case backend ever adds it)
+        }
+
+        // Optional: you can store this in a separate cookie / signed token if you want server-side protection later
+        res.json(responseData);
       } else {
         res.status(result.status).json(result.data);
       }
@@ -81,6 +103,23 @@ export async function registerRoutes(app: Express): Promise<Express> {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  // I also added a dedicated verification endpoint (optional but nice to have)
+  // You can call this from the frontend if you ever want to re-validate without logging in again
+  // Rate-limit this in production if you use it!
+  //(e.g. with express-rate-limit)
+  app.post("/auth/verify-admin-id", (req, res) => {
+    const { adminId } = req.body as { adminId?: string };
+
+    if (adminId && adminId === ADMIN_ID) {
+      res.json({ isAdmin: true });
+    } else {
+      // Don't reveal whether it exists or not → security best practice
+      res.json({ isAdmin: false });
+    }
+  });
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 
   app.post("/auth/create-user", async (req, res) => {
     try {
@@ -289,6 +328,51 @@ export async function registerRoutes(app: Express): Promise<Express> {
       }
     } catch (error: any) {
       console.error("Arbitrage Opportunities route error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // --- ADMIN ROUTES ---
+
+  app.get("/admini/dashboard", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
+      const url = queryString ? `/admini/dashboard?${queryString}` : "/admini/dashboard";
+      
+      const result = await proxyRequest(url, "GET", undefined, {
+        Authorization: authHeader || "",
+      });
+
+      if (result.ok) {
+        res.json(result.data);
+      } else {
+        res.status(result.status).json(result.data);
+      }
+    } catch (error: any) {
+      console.error("Admin Dashboard route error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/admini/suspend-user", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
+      // Note: The API defines this as a GET request for performing the action
+      const url = queryString ? `/admini/suspend-user?${queryString}` : "/admini/suspend-user";
+      
+      const result = await proxyRequest(url, "GET", undefined, {
+        Authorization: authHeader || "",
+      });
+
+      if (result.ok) {
+        res.json(result.data);
+      } else {
+        res.status(result.status).json(result.data);
+      }
+    } catch (error: any) {
+      console.error("Admin Suspend User route error:", error);
       res.status(500).json({ error: error.message });
     }
   });
