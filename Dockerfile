@@ -15,7 +15,7 @@ COPY . .
 
 # Build the app
 RUN npm run build
-RUN npm run preview
+
 
 # Expose port
 EXPOSE 5173
