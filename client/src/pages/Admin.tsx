@@ -234,11 +234,11 @@ const Admin = () => {
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
-   
+    
   // --- Profile Dropdown & Modal State ---
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [profileActiveTab, setProfileActiveTab] = useState("Profile"); // Profile, Password, Activity
+  const [profileActiveTab, setProfileActiveTab] = useState("Profile"); 
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -259,7 +259,6 @@ const Admin = () => {
   };
 
   const handleLogout = () => {
-    // Clear token and redirect
     localStorage.removeItem("token");
     setLocation("/");
   };
@@ -272,27 +271,20 @@ const Admin = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  
-  // Replaced mock data with empty initial state
+   
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [userPage, setUserPage] = useState(1);
-  const [newUser, setNewUser] = useState({ name: "", email: "", accountId: "" });
+  const [newUser, setNewUser] = useState({ name: "", email: "", password: "", accountId: "" });
 
   // --- FETCH USERS FROM API ---
   const fetchUsers = async () => {
     setIsLoadingUsers(true);
     try {
       const token = localStorage.getItem("token");
-      const headers = {
-        'Authorization': token ? `Bearer ${token}` : ''
-      };
+      const headers = { 'Authorization': token ? `Bearer ${token}` : '' };
 
-      // Construct URL params
       let url = `/admini/dashboard?page=${userPage}`;
-      
-      // If specifically filtering for suspended, pass it to API
-      // The API endpoint definition implies suspended is a specific filter
       if (filterStatus === "Suspended") {
         url += `&suspended=true`;
       }
@@ -300,22 +292,18 @@ const Admin = () => {
       const response = await fetch(url, { headers });
       if (response.ok) {
         const data = await response.json();
-        // Assuming the API returns an array of users or an object with a 'users' property
-        // Adjust this mapping based on exact API response structure
-        // For now, mapping assuming the response IS the array or contains 'users'
-        const usersData = Array.isArray(data) ? data : (data.users || []);
+        // Handle various response structures (array vs object)
+        const usersData = Array.isArray(data) ? data : (data.users || data.data || []);
         
-        // Map API data to UI User interface if needed (or use directly if matches)
-        // This is a safety mapping
         const mappedUsers = usersData.map((u: any) => ({
           id: u.id || u.user_id,
-          name: u.name || u.username || "Unknown",
+          name: u.name || u.full_name || u.username || "Unknown",
           email: u.email || "No Email",
           status: u.suspended ? "Suspended" : (u.status || "Active"),
-          balance: u.balance ? `$${u.balance}` : "$0.00",
-          trades: u.trades || 0,
-          joinDate: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : "N/A",
-          verified: u.verified || false
+          balance: u.balance ? `$${parseFloat(u.balance).toLocaleString()}` : "$0.00",
+          trades: u.trades_count || u.trades || 0,
+          joinDate: u.created_at ? new Date(u.created_at).toLocaleDateString() : "N/A",
+          verified: u.is_verified || u.verified || false
         }));
         
         setUsers(mappedUsers);
@@ -329,78 +317,88 @@ const Admin = () => {
     }
   };
 
-  // Trigger fetch when tab changes to Users, or page/filter changes
   useEffect(() => {
     if (activeTab === "Users") {
       fetchUsers();
     }
   }, [activeTab, userPage, filterStatus]);
 
-  // --- SUSPEND USER ACTION ---
+  // --- ACTIONS ---
   const handleUserAction = async (userId: number, currentStatus: string) => {
     try {
       const token = localStorage.getItem("token");
+      const action = currentStatus === "Suspended" ? "unsuspend" : "suspend";
+      const confirmMsg = action === "suspend" ? "Suspend this user?" : "Activate this user?";
       
-      // Determine action based on current status
-      // If currently suspended, we likely want to "activate" (action name depends on backend, assuming 'activate' or 'unsuspend')
-      // If active, we want to 'suspend'
-      const action = currentStatus === "Suspended" ? "activate" : "suspend";
-      
-      // Optimistic UI update (optional, but good UX)
-      const confirmMsg = action === "suspend" ? "Are you sure you want to suspend this user?" : "Activate this user?";
       if (!window.confirm(confirmMsg)) return;
 
+      // Note: routes.ts defined this as GET with query params
       const response = await fetch(`/admini/suspend-user?user_id=${userId}&action=${action}`, {
-        method: "GET", // Endpoint was defined as GET in routes.ts/prompt
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : ''
-        }
+        method: "GET",
+        headers: { 'Authorization': token ? `Bearer ${token}` : '' }
       });
 
       if (response.ok) {
-        // Refresh the list
-        fetchUsers();
+        fetchUsers(); // Refresh list
         alert(`User ${action}ed successfully.`);
       } else {
         const err = await response.json();
         alert(`Action failed: ${err.detail || "Unknown error"}`);
       }
     } catch (error) {
-      console.error("Error executing action:", error);
-      alert("Connection error occurred.");
+      alert("Connection error.");
     }
   };
 
-  // Client-side filtering for Search + Statuses not handled by API (like 'Pending')
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+        const token = localStorage.getItem("token");
+        // Using auth/create-user endpoint since routes.ts provides it
+        const response = await fetch("/auth/create-user", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+                email: newUser.email,
+                password: newUser.password, 
+                full_name: newUser.name,
+                // Any other fields your backend requires
+            })
+        });
+
+        if (response.ok) {
+            alert("User created successfully!");
+            setIsAddUserOpen(false);
+            setNewUser({ name: "", email: "", password: "", accountId: "" });
+            fetchUsers();
+        } else {
+            const data = await response.json();
+            alert(`Error: ${data.message || data.detail || "Failed to create user"}`);
+        }
+    } catch (error) {
+        alert("Network error occurred.");
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
       const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || user.email.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      // If API handles 'Suspended' via param, we might already have only suspended users.
-      // But for 'Active' vs 'Pending' (if API returns both), we filter here.
       let matchesStatus = true;
       if (filterStatus !== "All" && filterStatus !== "Suspended") {
-          // If we are in "Active" or "Pending" tab, filter client side
           matchesStatus = user.status === filterStatus;
       }
-      
       return matchesSearch && matchesStatus;
     });
   }, [users, searchTerm, filterStatus]);
 
   const userStats = {
-    total: users.length, // Ideally fetch from a stats endpoint
+    total: users.length,
     active: users.filter(u => u.status === "Active").length,
     pending: users.filter(u => u.status === "Pending").length,
     suspended: users.filter(u => u.status === "Suspended").length,
-  };
-
-  const handleAddUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Note: Real implementation would call an API to create user
-    alert("Create User API integration needed here.");
-    setIsAddUserOpen(false);
-    setNewUser({ name: "", email: "", accountId: "" });
   };
 
   // --- Payment Gateway State ---
@@ -494,7 +492,7 @@ const Admin = () => {
       alertThreshold: 10000
     }
   });
-   
+    
   const securityLogs = [
     { id: 1, severity: "MEDIUM", event: "Multiple failed login attempts from IP 192.168.1.100", user: "john.smith@email.com", timestamp: "2024-03-15 14:30:25", action: "Account temporarily locked", actionColor: "text-emerald-400" },
     { id: 2, severity: "HIGH", event: "Large withdrawal request detected", user: "sarah.j@email.com", timestamp: "2024-03-15 13:45:12", action: "Manual review required", actionColor: "text-emerald-400" },
@@ -503,14 +501,14 @@ const Admin = () => {
   ];
 
   // --- System Settings State ---
-  const [systemTab, setSystemTab] = useState("General"); // General, Notifications, Performance, Backup & Recovery
+  const [systemTab, setSystemTab] = useState("General"); 
   const [systemConfig, setSystemConfig] = useState({
     general: { siteName: "TradingPro Platform", siteDesc: "Advanced Trading Platform for Crypto, Forex & Futures", maintenance: false, registration: true, emailVerify: true },
     notifications: { email: true, sms: false, push: true, trading: true, system: true },
     performance: { caching: true, compression: true, cdn: true, maxUsers: 10000, sessionTimeout: 24 },
     backup: { auto: true, frequency: "Daily", retention: 30 }
   });
-   
+    
   const [backups, setBackups] = useState([
     { id: 1, name: "Full Backup", date: "2024-03-15 02:00:00", size: "2.4 GB", status: "Completed" },
     { id: 2, name: "Incremental", date: "2024-03-14 02:00:00", size: "156 MB", status: "Completed" },
@@ -518,7 +516,7 @@ const Admin = () => {
 
   // --- Handlers ---
   const handleSaveSettings = () => {
-    alert("All settings saved successfully!");
+    alert("Settings saving logic not yet connected to backend.");
   };
 
   const handleExportReport = () => {
@@ -603,7 +601,9 @@ const Admin = () => {
               <form onSubmit={handleAddUser} className="space-y-4">
                 <div><label className="block text-sm font-medium text-gray-400 mb-1">Full Name</label><input required type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.name} onChange={(e) => setNewUser({...newUser, name: e.target.value})} /></div>
                 <div><label className="block text-sm font-medium text-gray-400 mb-1">Email Address</label><input required type="email" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.email} onChange={(e) => setNewUser({...newUser, email: e.target.value})} /></div>
-                <div><label className="block text-sm font-medium text-gray-400 mb-1">Account ID (Optional)</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.accountId} onChange={(e) => setNewUser({...newUser, accountId: e.target.value})} /></div>
+                {/* Added Password Field for API Requirement */}
+                <div><label className="block text-sm font-medium text-gray-400 mb-1">Password</label><input required type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.password} onChange={(e) => setNewUser({...newUser, password: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-400 mb-1">Account ID</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.accountId} onChange={(e) => setNewUser({...newUser, accountId: e.target.value})} /></div>
                 <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded transition-colors mt-2">Create User</button>
               </form>
             </div>

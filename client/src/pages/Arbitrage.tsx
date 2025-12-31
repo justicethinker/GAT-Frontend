@@ -1,19 +1,35 @@
 import { Layout } from "@/components/Layout";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label"; // Added
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // Added
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 // --- FETCHER FUNCTION ---
 const defaultFetcher = async ({ queryKey }: any) => {
   const [path, params] = queryKey;
-  const queryString = params ? "?" + new URLSearchParams(params).toString() : "";
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        searchParams.append(key, value.join(','));
+      } else {
+        searchParams.append(key, String(value));
+      }
+    });
+  }
+  
+  const queryString = searchParams.toString() ? "?" + searchParams.toString() : "";
   const token = localStorage.getItem("token");
+  
   const res = await fetch(`${path}${queryString}`, {
     method: "GET",
     headers: {
@@ -26,6 +42,8 @@ const defaultFetcher = async ({ queryKey }: any) => {
 };
 
 export default function Arbitrage() {
+  const { toast } = useToast();
+
   // --- STATE ---
   const [selectedExchanges, setSelectedExchanges] = useState<string[]>(["BYBIT", "MEXC", "BINANCE"]);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>(["BTCUSDT", "ETHUSDT"]);
@@ -38,40 +56,95 @@ export default function Arbitrage() {
   const [autoExecute, setAutoExecute] = useState(false);
   const [emergencyStop, setEmergencyStop] = useState(false);
 
+  // --- NEW: Trade Execution State ---
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [selectedOpp, setSelectedOpp] = useState<any>(null);
+  const [tradeQty, setTradeQty] = useState("0.01");
+
   // --- QUERIES ---
-  const { data: exchanges = [], isLoading: exchangesLoading } = useQuery({
-    queryKey: ["/arb/exchanges"],
+  
+  const { data: exchangeList = [] } = useQuery({
+    queryKey: ["/arb/arbitrage-exc"],
     queryFn: defaultFetcher,
     retry: false,
   });
 
-  const { data: symbols = [], isLoading: symbolsLoading } = useQuery({
-    queryKey: ["/arb/symbols"],
+  const { data: symbolList = [] } = useQuery({
+    queryKey: ["/arb/arbitrage-symbol"],
     queryFn: defaultFetcher,
     retry: false,
   });
 
-  const { data: opportunities = [], isLoading: opportunitiesLoading } = useQuery({
+  const { data: rawOpportunities, isLoading: opportunitiesLoading } = useQuery({
     queryKey: [
-      "/arb/opportunities",
+      "/arb/opportunity-scanner",
       {
-        exchanges: selectedExchanges.join(','),
-        symbols: selectedSymbols.join(','),
-        minProfit: minProfit.toString(),
+        exchanges: selectedExchanges,
+        symbols: selectedSymbols,
+        min_profit: minProfit,
       },
     ],
     queryFn: defaultFetcher,
     retry: false,
-    enabled: isScannerRunning, // Only fetch if scanner is "Running"
+    enabled: isScannerRunning && !emergencyStop, 
     refetchInterval: 3000,
   });
 
-  // --- MOCK DATA FOR UI DEMO (Since backend endpoints might not exist for these specific sections yet) ---
-  const activeTrades = [
-    { pair: "BTC/USDT", route: "Binance → Coinbase", amount: "0.5 BTC", pnl: "+$52.75", pnlPercent: "+0.30%", progress: 75, status: "Active" },
-    { pair: "ETH/USDT", route: "Kraken → Binance", amount: "2 ETH", pnl: "+$20.15", pnlPercent: "+0.56%", progress: 45, status: "Active" },
-  ];
+  const opportunities = Array.isArray(rawOpportunities) ? rawOpportunities : [];
 
+  const { data: rawHistory } = useQuery({
+    queryKey: ["/arb/user-arb"],
+    queryFn: defaultFetcher,
+    retry: false,
+  });
+
+  const tradeHistory = Array.isArray(rawHistory) ? rawHistory : [];
+
+  // --- MUTATIONS ---
+  const executeTradeMutation = useMutation({
+    mutationFn: async (tradeData: any) => {
+      return await apiRequest("POST", "/arb/perform-arb-trade", tradeData);
+    },
+    onSuccess: () => {
+      toast({ title: "Trade Executed", description: "Arbitrage trade placed successfully." });
+      queryClient.invalidateQueries({ queryKey: ["/arb/user-arb"] });
+      setTradeModalOpen(false); // Close modal on success
+    },
+    onError: (error: any) => {
+      toast({ title: "Execution Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // 1. Open the Modal
+  const handleSetupTrade = (opp: any) => {
+    if(emergencyStop) return;
+    setSelectedOpp(opp);
+    setTradeModalOpen(true);
+  };
+
+  // 2. Confirm and Send to API
+  const handleConfirmTrade = () => {
+    if (!selectedOpp) return;
+    executeTradeMutation.mutate({
+      symbol: selectedOpp.symbol,
+      buy_exchange: selectedOpp.exchange_buy,
+      sell_exchange: selectedOpp.exchange_sell,
+      qty: parseFloat(tradeQty) // Use the input value
+    });
+  };
+
+  const getExchangeName = (ex: any) => (typeof ex === 'object' && ex !== null ? ex.name : ex);
+
+  const toggleExchange = (ex: any) => {
+    const name = getExchangeName(ex);
+    if (selectedExchanges.includes(name)) {
+      setSelectedExchanges(prev => prev.filter(e => e !== name));
+    } else {
+      setSelectedExchanges(prev => [...prev, name]);
+    }
+  };
+
+  // Mock Alerts
   const priceAlerts = [
     { pair: "BTC/USDT", exchange: "Binance", current: "$43,250", target: "$45,000", type: "Above", status: "Active", progress: 96 },
     { pair: "ETH/USDT", exchange: "Coinbase", current: "$2,650", target: "$2,500", type: "Below", status: "Active", progress: 0 },
@@ -81,19 +154,80 @@ export default function Arbitrage() {
     <Layout>
       <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 lg:py-8 space-y-6">
         
+        {/* --- MODAL: Trade Execution --- */}
+        <Dialog open={tradeModalOpen} onOpenChange={setTradeModalOpen}>
+          <DialogContent className="bg-gray-900 border-gray-800 text-white sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <i className="ri-flashlight-fill text-yellow-500"></i> Execute Arbitrage
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Review parameters before executing this trade.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedOpp && (
+              <div className="grid gap-4 py-4">
+                <div className="flex items-center justify-between bg-gray-800/50 p-3 rounded border border-gray-700">
+                  <div className="text-center">
+                    <p className="text-xs text-blue-400 font-bold">BUY</p>
+                    <p className="text-sm font-bold text-white">{selectedOpp.exchange_buy}</p>
+                    <p className="text-xs text-gray-400">${selectedOpp.price_buy}</p>
+                  </div>
+                  <i className="ri-arrow-right-line text-gray-500"></i>
+                  <div className="text-center">
+                    <p className="text-xs text-purple-400 font-bold">SELL</p>
+                    <p className="text-sm font-bold text-white">{selectedOpp.exchange_sell}</p>
+                    <p className="text-xs text-gray-400">${selectedOpp.price_sell}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="symbol" className="text-right text-gray-400">Symbol</Label>
+                  <Input id="symbol" value={selectedOpp.symbol} disabled className="col-span-3 bg-gray-800 border-gray-700 text-gray-500" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="qty" className="text-right text-white">Quantity</Label>
+                  <Input 
+                    id="qty" 
+                    type="number" 
+                    value={tradeQty} 
+                    onChange={(e) => setTradeQty(e.target.value)} 
+                    className="col-span-3 bg-gray-950 border-gray-700 text-white focus:border-emerald-500" 
+                  />
+                </div>
+                <div className="flex justify-between items-center px-2">
+                   <span className="text-sm text-gray-400">Est. Profit:</span>
+                   <span className="text-sm font-bold text-emerald-400">
+                     +{(selectedOpp.profit_percentage || 0).toFixed(2)}%
+                   </span>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTradeModalOpen(false)} className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white">Cancel</Button>
+              <Button onClick={handleConfirmTrade} disabled={executeTradeMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                {executeTradeMutation.isPending ? "Executing..." : "Confirm Trade"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* --- TOP SECTION: SCANNER CONTROL --- */}
         <Card className="bg-gray-900 border-gray-800 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
             <div>
                 <h1 className="text-xl font-bold text-white flex items-center gap-2">
                     Arbitrage Scanner Control
-                    <span className={`h-2.5 w-2.5 rounded-full ${isScannerRunning ? 'bg-emerald-500 animate-pulse' : 'bg-gray-500'}`}></span>
+                    <span className={`h-2.5 w-2.5 rounded-full ${isScannerRunning && !emergencyStop ? 'bg-emerald-500 animate-pulse' : 'bg-gray-500'}`}></span>
                 </h1>
                 <p className="text-gray-400 text-sm mt-1">Start scanning to discover arbitrage opportunities across multiple exchanges in real-time.</p>
             </div>
             <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-400">{isScannerRunning ? "Scanner Active" : "Scanner Idle"}</span>
+                <span className="text-sm text-gray-400">{isScannerRunning ? (emergencyStop ? "HALTED" : "Scanner Active") : "Scanner Idle"}</span>
                 <Button 
                     onClick={() => setIsScannerRunning(!isScannerRunning)}
+                    disabled={emergencyStop}
                     className={`${isScannerRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-700'} text-white min-w-[140px]`}
                 >
                     <i className={`ri-${isScannerRunning ? 'stop' : 'play'}-circle-line mr-2`}></i>
@@ -112,27 +246,37 @@ export default function Arbitrage() {
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="font-bold text-white">Exchange Filters</h3>
                         <div className="flex gap-2">
-                            <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded cursor-pointer">All</span>
-                            <span className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded cursor-pointer">None</span>
+                            <span onClick={() => setSelectedExchanges(Array.isArray(exchangeList) ? exchangeList.map(getExchangeName) : [])} className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded cursor-pointer">All</span>
+                            <span onClick={() => setSelectedExchanges([])} className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded cursor-pointer">None</span>
                         </div>
                     </div>
                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                        {["Binance", "KuCoin", "OKX", "MEXC", "HTX", "XT", "Bitget"].map(ex => (
-                            <div key={ex} className="flex items-center justify-between p-2 rounded hover:bg-gray-800/50">
-                                <div className="flex items-center gap-2">
-                                    <div className={`w-4 h-4 rounded border ${selectedExchanges.includes(ex.toUpperCase()) ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600'}`}>
-                                        {selectedExchanges.includes(ex.toUpperCase()) && <i className="ri-check-line text-white text-xs block text-center"></i>}
+                        {Array.isArray(exchangeList) && exchangeList.length > 0 ? (
+                            exchangeList.map((ex: any, idx: number) => {
+                                const name = getExchangeName(ex);
+                                return (
+                                    <div 
+                                        key={name || idx} 
+                                        onClick={() => toggleExchange(ex)}
+                                        className="flex items-center justify-between p-2 rounded hover:bg-gray-800/50 cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedExchanges.includes(name) ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600'}`}>
+                                                {selectedExchanges.includes(name) && <i className="ri-check-line text-white text-xs"></i>}
+                                            </div>
+                                            <span className="text-gray-300 text-sm">{name}</span>
+                                        </div>
                                     </div>
-                                    <span className="text-gray-300 text-sm">{ex}</span>
-                                </div>
-                                <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
-                            </div>
-                        ))}
+                                );
+                            })
+                        ) : (
+                            <div className="text-gray-500 text-xs p-2">Loading exchanges...</div>
+                        )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-4">Selected: {selectedExchanges.length} / 15 exchanges</p>
+                    <p className="text-xs text-gray-500 mt-4">Selected: {selectedExchanges.length} exchanges</p>
                 </Card>
 
-                {/* Wallet Manager (NEW) */}
+                {/* Wallet Manager */}
                 <Card className="bg-gray-900 border-gray-800 p-4">
                     <h3 className="font-bold text-white mb-4">Wallet Manager</h3>
                     <Select defaultValue="binance">
@@ -167,19 +311,6 @@ export default function Arbitrage() {
                             <div className="text-right">
                                 <p className="text-white text-sm">$45,252</p>
                                 <p className="text-emerald-400 text-xs">+2.84%</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-between p-2 bg-gray-800/30 rounded-lg">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-xs">BTC</div>
-                                <div>
-                                    <p className="text-white text-sm font-medium">BTC</p>
-                                    <p className="text-gray-500 text-xs">Balance: 0.85</p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-white text-sm">$36,742</p>
-                                <p className="text-emerald-400 text-xs">+2.1%</p>
                             </div>
                         </div>
                     </div>
@@ -218,9 +349,9 @@ export default function Arbitrage() {
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-lg font-bold text-white">Real-Time Opportunities</h2>
                                 <div className="flex gap-4 text-center">
-                                    <div><p className="text-2xl font-bold text-white">{opportunitiesLoading ? "..." : opportunities.length + 12}</p><p className="text-xs text-gray-500">Scanned</p></div>
-                                    <div><p className="text-2xl font-bold text-emerald-400">{opportunitiesLoading ? "..." : opportunities.length}</p><p className="text-xs text-gray-500">Profitable</p></div>
-                                    <div><p className="text-2xl font-bold text-blue-400">{activeTrades.length}</p><p className="text-xs text-gray-500">Active</p></div>
+                                    <div><p className="text-2xl font-bold text-white">{opportunities.length + (opportunitiesLoading ? 0 : 12)}</p><p className="text-xs text-gray-500">Scanned</p></div>
+                                    <div><p className="text-2xl font-bold text-emerald-400">{opportunities.length}</p><p className="text-xs text-gray-500">Profitable</p></div>
+                                    <div><p className="text-2xl font-bold text-blue-400">{tradeHistory.length}</p><p className="text-xs text-gray-500">Executed</p></div>
                                 </div>
                             </div>
 
@@ -245,14 +376,17 @@ export default function Arbitrage() {
                                 </div>
                                 <div>
                                     <label className="text-xs text-gray-400 mb-1 block">Min Profit ($)</label>
-                                    <Input className="bg-gray-800 border-gray-700 h-9 text-xs" defaultValue="10" />
+                                    <Input 
+                                      className="bg-gray-800 border-gray-700 h-9 text-xs" 
+                                      value={minProfit} 
+                                      onChange={(e) => setMinProfit(parseFloat(e.target.value))} 
+                                    />
                                 </div>
                             </div>
 
                             <div className="flex gap-2 mt-4">
                                 <Button size="sm" className="bg-emerald-600 text-white text-xs"><i className="ri-money-dollar-circle-line mr-1"></i> Profit</Button>
                                 <Button size="sm" variant="outline" className="border-gray-700 text-gray-400 text-xs"><i className="ri-bar-chart-line mr-1"></i> Spread</Button>
-                                <Button size="sm" variant="outline" className="border-gray-700 text-gray-400 text-xs"><i className="ri-signal-tower-line mr-1"></i> Volume</Button>
                                 <div className="ml-auto">
                                     <Select defaultValue="all">
                                         <SelectTrigger className="bg-gray-800 border-gray-700 h-8 text-xs w-[120px]"><SelectValue placeholder="Risk Level" /></SelectTrigger>
@@ -262,7 +396,7 @@ export default function Arbitrage() {
                             </div>
                         </Card>
 
-                        {/* Existing Opportunities List */}
+                        {/* Opportunities List */}
                         <Card className="bg-gray-900 border-gray-800 overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="w-full">
@@ -278,18 +412,28 @@ export default function Arbitrage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-800">
-                                        {opportunities.length === 0 ? (
-                                             <tr><td colSpan={7} className="text-center p-8 text-gray-500">Start scanner to see opportunities</td></tr>
+                                        {opportunitiesLoading ? (
+                                            <tr><td colSpan={7} className="text-center p-8 text-gray-500">Scanning for opportunities...</td></tr>
+                                        ) : opportunities.length === 0 ? (
+                                            <tr><td colSpan={7} className="text-center p-8 text-gray-500">No opportunities matching criteria. Start scanner to see live data.</td></tr>
                                         ) : (
                                             opportunities.map((opp: any, idx: number) => (
                                                 <tr key={idx} className="hover:bg-gray-800/50">
-                                                    <td className="p-4 text-white font-medium">{opp.symbol || 'BTC/USDT'}</td>
+                                                    <td className="p-4 text-white font-medium">{opp.symbol}</td>
                                                     <td className="p-4"><span className="text-blue-400 bg-blue-500/10 px-2 py-1 rounded text-xs">{opp.exchange_buy}</span></td>
                                                     <td className="p-4 text-right text-gray-300 font-mono">${opp.price_buy}</td>
                                                     <td className="p-4 pl-8"><span className="text-purple-400 bg-purple-500/10 px-2 py-1 rounded text-xs">{opp.exchange_sell}</span></td>
                                                     <td className="p-4 text-right text-gray-300 font-mono">${opp.price_sell}</td>
-                                                    <td className="p-4 text-right text-emerald-400 font-bold">+{opp.profit_percentage?.toFixed(2)}%</td>
-                                                    <td className="p-4 text-right"><Button size="sm" className="bg-emerald-600 h-7 text-xs">Execute</Button></td>
+                                                    <td className="p-4 text-right text-emerald-400 font-bold">+{opp.profit_percentage ? opp.profit_percentage.toFixed(3) : 0}%</td>
+                                                    <td className="p-4 text-right">
+                                                      <Button 
+                                                        size="sm" 
+                                                        className="bg-emerald-600 h-7 text-xs hover:bg-emerald-700"
+                                                        onClick={() => handleSetupTrade(opp)} // CLICK HERE OPENS THE MODAL
+                                                      >
+                                                        Execute
+                                                      </Button>
+                                                    </td>
                                                 </tr>
                                             ))
                                         )}
@@ -461,33 +605,40 @@ export default function Arbitrage() {
             </div>
 
             <Card className="bg-gray-900 border-gray-800 p-6 space-y-6">
-                {activeTrades.map((trade, idx) => (
-                    <div key={idx} className="bg-gray-950/50 border border-gray-800 rounded-lg p-4">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                            <div>
-                                <h3 className="text-white font-bold text-lg">{trade.pair} <span className="text-gray-400 text-sm font-normal ml-2">{trade.route} • {trade.amount}</span></h3>
-                                <p className="text-xs text-gray-500 mt-1">Status: {trade.status}</p>
-                            </div>
-                            <div className="text-right">
-                                <h3 className="text-emerald-400 font-bold text-xl">{trade.pnl}</h3>
-                                <p className="text-emerald-500/80 text-xs">{trade.pnlPercent}</p>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                             <div className="flex justify-between text-xs text-gray-400">
-                                <span>Progress</span>
-                                <span>{trade.progress}%</span>
-                             </div>
-                             <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 rounded-full" style={{width: `${trade.progress}%`}}></div>
-                             </div>
-                        </div>
-                        <div className="flex gap-3 mt-4">
-                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white"><i className="ri-eye-line mr-2"></i> View Details</Button>
-                            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white"><i className="ri-close-line mr-2"></i> Cancel Trade</Button>
-                        </div>
+                {tradeHistory.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                        <p>No active trades or history found.</p>
                     </div>
-                ))}
+                ) : (
+                    tradeHistory.map((trade: any, idx: number) => (
+                        <div key={idx} className="bg-gray-950/50 border border-gray-800 rounded-lg p-4">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                                <div>
+                                    <h3 className="text-white font-bold text-lg">{trade.symbol} <span className="text-gray-400 text-sm font-normal ml-2">{trade.buy_exchange || 'Unknown'} → {trade.sell_exchange || 'Unknown'}</span></h3>
+                                    <p className="text-xs text-gray-500 mt-1">Status: {trade.status || 'Active'}</p>
+                                </div>
+                                <div className="text-right">
+                                    <h3 className={`font-bold text-xl ${trade.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {trade.profit >= 0 ? '+' : ''}${trade.profit}
+                                    </h3>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                 <div className="flex justify-between text-xs text-gray-400">
+                                    <span>Progress</span>
+                                    <span>{trade.status === 'Completed' ? 100 : 50}%</span>
+                                 </div>
+                                 <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500 rounded-full" style={{width: `${trade.status === 'Completed' ? 100 : 50}%`}}></div>
+                                 </div>
+                            </div>
+                            <div className="flex gap-3 mt-4">
+                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white"><i className="ri-eye-line mr-2"></i> View Details</Button>
+                                <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white"><i className="ri-close-line mr-2"></i> Cancel Trade</Button>
+                            </div>
+                        </div>
+                    ))
+                )}
             </Card>
         </div>
 
