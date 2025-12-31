@@ -185,9 +185,10 @@ const StatusBadge = ({ status }: { status: string }) => {
     Approved: "bg-emerald-500/10 text-emerald-500",
     "Pending Review": "bg-yellow-500/10 text-yellow-500"
   };
+  const normalizedStatus = Object.keys(styles).find(key => key.toLowerCase() === (status || "").toLowerCase()) || "Pending";
   return (
-    <span className={`px-2 py-1 rounded text-xs font-medium ${styles[status as keyof typeof styles] || "text-gray-400"}`}>
-      {status}
+    <span className={`px-2 py-1 rounded text-xs font-medium ${styles[normalizedStatus as keyof typeof styles] || "text-gray-400"}`}>
+      {status || "Unknown"}
     </span>
   );
 };
@@ -205,7 +206,6 @@ const SeverityBadge = ({ level }: { level: string }) => {
     )
 }
 
-// --- Reusable Switch Component ---
 const Switch = ({ checked, onChange }: { checked: boolean; onChange: (val: boolean) => void }) => (
   <button 
     onClick={() => onChange(!checked)}
@@ -225,6 +225,7 @@ interface User {
   trades: number;
   joinDate: string;
   verified: boolean;
+  rawBalance: number;
 }
 
 // --- Main Admin Page ---
@@ -241,7 +242,6 @@ const Admin = () => {
   const [profileActiveTab, setProfileActiveTab] = useState("Profile"); 
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
@@ -259,6 +259,7 @@ const Admin = () => {
   };
 
   const handleLogout = () => {
+    sessionStorage.removeItem("token");
     localStorage.removeItem("token");
     setLocation("/");
   };
@@ -281,7 +282,7 @@ const Admin = () => {
   const fetchUsers = async () => {
     setIsLoadingUsers(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       const headers = { 'Authorization': token ? `Bearer ${token}` : '' };
 
       let url = `/admini/dashboard?page=${userPage}`;
@@ -290,17 +291,30 @@ const Admin = () => {
       }
 
       const response = await fetch(url, { headers });
+      
       if (response.ok) {
-        const data = await response.json();
-        // Handle various response structures (array vs object)
-        const usersData = Array.isArray(data) ? data : (data.users || data.data || []);
+        const rawData = await response.json();
         
-        const mappedUsers = usersData.map((u: any) => ({
+        let usersArray: any[] = [];
+        if (Array.isArray(rawData)) {
+            usersArray = rawData;
+        } else if (rawData.users && Array.isArray(rawData.users)) {
+            usersArray = rawData.users;
+        } else if (rawData.data && Array.isArray(rawData.data)) {
+            usersArray = rawData.data;
+        } else if (rawData.items && Array.isArray(rawData.items)) {
+            usersArray = rawData.items;
+        } else if (rawData.results && Array.isArray(rawData.results)) {
+            usersArray = rawData.results;
+        }
+
+        const mappedUsers = usersArray.map((u: any) => ({
           id: u.id || u.user_id,
-          name: u.name || u.full_name || u.username || "Unknown",
+          name: u.name || u.full_name || u.username || "Unknown User",
           email: u.email || "No Email",
           status: u.suspended ? "Suspended" : (u.status || "Active"),
           balance: u.balance ? `$${parseFloat(u.balance).toLocaleString()}` : "$0.00",
+          rawBalance: u.balance ? parseFloat(u.balance) : 0, 
           trades: u.trades_count || u.trades || 0,
           joinDate: u.created_at ? new Date(u.created_at).toLocaleDateString() : "N/A",
           verified: u.is_verified || u.verified || false
@@ -308,7 +322,7 @@ const Admin = () => {
         
         setUsers(mappedUsers);
       } else {
-        console.error("Failed to fetch users");
+        console.error("Failed to fetch users. Status:", response.status);
       }
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -318,43 +332,38 @@ const Admin = () => {
   };
 
   useEffect(() => {
-    if (activeTab === "Users") {
-      fetchUsers();
-    }
-  }, [activeTab, userPage, filterStatus]);
+    fetchUsers();
+  }, [userPage, filterStatus]); 
 
   // --- ACTIONS ---
   const handleUserAction = async (userId: number, currentStatus: string) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       const action = currentStatus === "Suspended" ? "unsuspend" : "suspend";
-      const confirmMsg = action === "suspend" ? "Suspend this user?" : "Activate this user?";
       
-      if (!window.confirm(confirmMsg)) return;
+      if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
 
-      // Note: routes.ts defined this as GET with query params
       const response = await fetch(`/admini/suspend-user?user_id=${userId}&action=${action}`, {
         method: "GET",
         headers: { 'Authorization': token ? `Bearer ${token}` : '' }
       });
 
       if (response.ok) {
-        fetchUsers(); // Refresh list
+        await fetchUsers(); 
         alert(`User ${action}ed successfully.`);
       } else {
         const err = await response.json();
         alert(`Action failed: ${err.detail || "Unknown error"}`);
       }
     } catch (error) {
-      alert("Connection error.");
+      alert("Connection error occurred.");
     }
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-        const token = localStorage.getItem("token");
-        // Using auth/create-user endpoint since routes.ts provides it
+        const token = sessionStorage.getItem("token");
         const response = await fetch("/auth/create-user", {
             method: "POST",
             headers: {
@@ -365,7 +374,6 @@ const Admin = () => {
                 email: newUser.email,
                 password: newUser.password, 
                 full_name: newUser.name,
-                // Any other fields your backend requires
             })
         });
 
@@ -394,6 +402,27 @@ const Admin = () => {
     });
   }, [users, searchTerm, filterStatus]);
 
+  // --- DYNAMIC ANALYTICS CALCULATIONS ---
+  const platformStats = useMemo(() => {
+    const totalUsers = users.length;
+    const activeUsers = users.filter(u => u.status === "Active").length;
+    const suspendedUsers = users.filter(u => u.status === "Suspended").length;
+    
+    // Calculate total balance held on platform as a proxy for Volume/Revenue if API doesn't provide it
+    const totalBalance = users.reduce((acc, curr) => acc + (curr.rawBalance || 0), 0);
+    const totalTrades = users.reduce((acc, curr) => acc + (curr.trades || 0), 0);
+
+    return {
+        totalUsers,
+        activeUsers,
+        suspendedUsers,
+        totalBalance: `$${totalBalance.toLocaleString()}`,
+        totalTrades
+    };
+  }, [users]);
+  
+  // --- USER STATS FOR USERS TAB ---
+  // Re-added this variable to fix the "userStats is not defined" error
   const userStats = {
     total: users.length,
     active: users.filter(u => u.status === "Active").length,
@@ -551,6 +580,7 @@ const Admin = () => {
     setIsRestarting(true);
     setTimeout(() => {
       // Simulate logout
+      sessionStorage.removeItem("token");
       localStorage.removeItem("token");
       setLocation("/"); // Redirect to landing page
     }, 3000);
@@ -603,7 +633,7 @@ const Admin = () => {
                 <div><label className="block text-sm font-medium text-gray-400 mb-1">Email Address</label><input required type="email" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.email} onChange={(e) => setNewUser({...newUser, email: e.target.value})} /></div>
                 {/* Added Password Field for API Requirement */}
                 <div><label className="block text-sm font-medium text-gray-400 mb-1">Password</label><input required type="password" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.password} onChange={(e) => setNewUser({...newUser, password: e.target.value})} /></div>
-                <div><label className="block text-sm font-medium text-gray-400 mb-1">Account ID</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.accountId} onChange={(e) => setNewUser({...newUser, accountId: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-400 mb-1">Account ID (Optional)</label><input type="text" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={newUser.accountId} onChange={(e) => setNewUser({...newUser, accountId: e.target.value})} /></div>
                 <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded transition-colors mt-2">Create User</button>
               </form>
             </div>
@@ -795,11 +825,12 @@ const Admin = () => {
                     <div><h3 className="text-xl font-bold text-white">Analytics Dashboard</h3><p className="text-sm text-gray-400">Platform performance and user insights</p></div>
                     <div className="flex bg-gray-900 p-1 rounded-lg border border-gray-800 self-start md:self-auto">{timeFilters.map((filter) => (<button key={filter} onClick={() => setTimeRange(filter)} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${timeRange === filter ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}>{filter}</button>))}</div>
                   </div>
+                  {/* --- REAL DATA INTEGRATED INTO STAT CARDS --- */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard title="Total Users" value="2,847" subValue="+12.5%" icon={Users} colorClass="text-emerald-400" />
-                    <StatCard title="Active Traders" value="1,234" subValue="+8.2%" icon={Activity} colorClass="text-emerald-400" />
-                    <StatCard title="Total Volume" value="$24.8M" subValue="+15.7%" icon={BarChart3} colorClass="text-yellow-400" />
-                    <StatCard title="Revenue" value="$124.5K" subValue="+22.1%" icon={Wallet} colorClass="text-purple-400" />
+                    <StatCard title="Total Users" value={platformStats.totalUsers} subValue="+12.5%" icon={Users} colorClass="text-emerald-400" />
+                    <StatCard title="Active Traders" value={platformStats.activeUsers} subValue="+8.2%" icon={Activity} colorClass="text-emerald-400" />
+                    <StatCard title="Suspended" value={platformStats.suspendedUsers} subValue="+2" icon={Ban} colorClass="text-red-400" />
+                    <StatCard title="Total Balance" value={platformStats.totalBalance} subValue="+5%" icon={Wallet} colorClass="text-yellow-400" />
                   </div>
                 </section>
                 <section className="grid grid-cols-1 lg:grid-cols-2 gap-6"><ChartPlaceholder title="Revenue Overview" label="Revenue chart visualization" icon={BarChart3} color="text-emerald-500" /><ChartPlaceholder title="User Growth" label="User growth chart" icon={LineChart} color="text-blue-500" /></section>
@@ -825,11 +856,12 @@ const Admin = () => {
                       <button onClick={handleExportReport} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"><Download size={14} /> Export Data</button>
                     </div>
                   </div>
+                  {/* --- REAL DATA INTEGRATED INTO ANALYTICS STAT CARDS --- */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard title="Total Users" value="2,847" subValue="+12.5%" icon={Users} colorClass="text-emerald-400" />
-                    <StatCard title="Active Traders" value="1,234" subValue="+8.2%" icon={Activity} colorClass="text-emerald-400" />
-                    <StatCard title="Total Volume" value="$24.8M" subValue="+15.7%" icon={BarChart3} colorClass="text-yellow-400" />
-                    <StatCard title="Revenue" value="$124.5K" subValue="+22.1%" icon={Wallet} colorClass="text-purple-400" />
+                    <StatCard title="Total Users" value={platformStats.totalUsers} subValue="+12.5%" icon={Users} colorClass="text-emerald-400" />
+                    <StatCard title="Active Traders" value={platformStats.activeUsers} subValue="+8.2%" icon={Activity} colorClass="text-emerald-400" />
+                    <StatCard title="Total Trades" value={platformStats.totalTrades} subValue="+15.7%" icon={BarChart3} colorClass="text-yellow-400" />
+                    <StatCard title="Total Balance" value={platformStats.totalBalance} subValue="+22.1%" icon={Wallet} colorClass="text-purple-400" />
                   </div>
                 </section>
                 <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">

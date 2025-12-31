@@ -50,13 +50,13 @@ export default function Login() {
       const response = await apiRequest("POST", "/auth/token", formData.toString());
 
       if (response.access_token) {
-        localStorage.setItem("token", response.access_token);
+        sessionStorage.setItem("token", response.access_token);
 
         // Determine if this is an admin login
         const isAdmin = adminId.trim() === CORRECT_ADMIN_ID;
 
         // Store the flag so your admin page (or layout) can protect the route
-        localStorage.setItem("isAdmin", isAdmin ? "true" : "false");
+        sessionStorage.setItem("isAdmin", isAdmin ? "true" : "false");
 
         toast({
           title: "Success",

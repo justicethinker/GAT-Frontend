@@ -63,6 +63,7 @@ export function Header() {
   }, [location]);
 
   const handleLogout = () => {
+    sessionStorage.removeItem("token");
     localStorage.removeItem("token");
     queryClient.clear();
     window.location.href = "/login";

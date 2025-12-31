@@ -70,6 +70,7 @@ export default function Settings() {
               <button
                 onClick={async () => {
                   await fetch('/auth/logout', { method: 'POST' });
+                  sessionStorage.removeItem("token");
                   localStorage.removeItem('token');
                   window.location.href = '/login';
                 }}

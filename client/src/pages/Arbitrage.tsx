@@ -28,7 +28,7 @@ const defaultFetcher = async ({ queryKey }: any) => {
   }
   
   const queryString = searchParams.toString() ? "?" + searchParams.toString() : "";
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   
   const res = await fetch(`${path}${queryString}`, {
     method: "GET",

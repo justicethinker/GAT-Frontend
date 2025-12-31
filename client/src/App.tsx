@@ -57,13 +57,13 @@ function AdminIdPrompt() {
   const handleConfirm = () => {
     if (value.trim() === CORRECT_ADMIN_ID) {
       // 1. Set the flag
-      localStorage.setItem("isAdmin", "true");
+      sessionStorage.setItem("isAdmin", "true");
       
       // 2. Close the dialog
       close();
 
       // 3. Navigate with a tiny delay. 
-      // This ensures localStorage is written BEFORE the new route mounts and checks it.
+      // This ensures sessionStorage is written BEFORE the new route mounts and checks it.
       setTimeout(() => {
         setLocation("/admin");
       }, 100);
@@ -115,11 +115,11 @@ function AdminIdPrompt() {
 // ──────────────────────────────────────────────────────────────
 // AUTH HELPERS
 // ──────────────────────────────────────────────────────────────
-const isAuthenticated = () => !!localStorage.getItem("token");
+const isAuthenticated = () => !!sessionStorage.getItem("token");
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const [, setLocation] = useLocation();
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
 
   if (!token) return <Redirect to="/login" />;
 
@@ -130,6 +130,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   });
 
   if (isError) {
+    sessionStorage.removeItem("token");
     localStorage.removeItem("token");
     localStorage.removeItem("isAdmin"); // cleanup
     queryClient.clear();
@@ -166,7 +167,7 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 // ──────────────────────────────────────────────────────────────
 // This component performs the check EXACTLY when the route is hit.
 function AdminGuard() {
-  const isAdmin = localStorage.getItem("isAdmin") === "true";
+  const isAdmin = sessionStorage.getItem("isAdmin") === "true";
 
   if (!isAdmin) {
     return <Redirect to="/dashboard" />;
@@ -186,7 +187,7 @@ function Router() {
   useEffect(() => {
     // @ts-ignore - we're intentionally adding to window
     window.goToAdmin = () => {
-      if (localStorage.getItem("isAdmin") === "true") {
+      if (sessionStorage.getItem("isAdmin") === "true") {
         setLocation("/admin");
       } else {
         openAdminGate();

@@ -247,7 +247,7 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
-  // --- ARBITRAGE ROUTES (Updated to match docs) ---
+  // --- ARBITRAGE ROUTES ---
 
   app.get("/arb/arbitrage-exc", async (req, res) => {
     try {
@@ -302,8 +302,9 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
-  // --- ADMIN ROUTES (Updated & Expanded) ---
+  // --- ADMIN ROUTES (Fixed & Verified) ---
 
+  // 1. Dashboard: Passes 'page' and 'suspended' query params
   app.get("/admini/dashboard", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -316,6 +317,7 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
+  // 2. View User: Passes 'user_id' query param
   app.get("/admini/view-user", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -328,11 +330,15 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
+  // 3. Edit User: Passes 'user_id' in query param, body data in request body
   app.patch("/admini/edit-user", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
+      // Extract user_id from query params to append to URL
       const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
       const url = `/admini/edit-user?${queryString}`;
+      
+      // Forward the body (name, etc.) and the Authorization header
       const result = await proxyRequest(url, "PATCH", req.body, { Authorization: authHeader || "" });
       res.status(result.status).json(result.data);
     } catch (error: any) {
@@ -340,6 +346,7 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
+  // 4. Suspend User: Passes 'user_id' and 'action' query params
   app.get("/admini/suspend-user", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;

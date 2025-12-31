@@ -6,7 +6,7 @@ export function useTheme() {
   // Initialize state lazily so we read from localStorage immediately on mount
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('theme') as Theme) || 'dark';
+      return (sessionStorage.getItem('theme') as Theme) || 'dark';
     }
     return 'dark';
   });
@@ -37,7 +37,7 @@ export function useTheme() {
       root.classList.add(theme);
     }
 
-    localStorage.setItem('theme', theme);
+    sessionStorage.setItem('theme', theme);
   }, [theme]);
 
   const setTheme = (newTheme: Theme) => setThemeState(newTheme);
