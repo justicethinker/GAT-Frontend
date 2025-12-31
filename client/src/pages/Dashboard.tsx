@@ -3,40 +3,103 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
+import { useMemo } from "react";
+
+// --- CONFIGURATION ---
+const API_BASE = "https://gat-zm1r.onrender.com";
+
+// --- FETCHER FUNCTION ---
+const defaultFetcher = async ({ queryKey }: any) => {
+  const [path] = queryKey;
+  const token = sessionStorage.getItem("token"); 
+  
+  const url = `${API_BASE}${path}`;
+  
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Error fetching ${path}: ${res.statusText}`);
+  }
+  return res.json();
+};
 
 export default function Dashboard() {
-  // 1. Existing Stats & Trades
-  const { data: stats, isLoading: statsLoading } = useQuery<any>({
-    queryKey: ["/dash/stats"],
-    retry: false,
-  });
-
+  // 1. Fetch Real Data Streams
   const { data: recentTrades = [], isLoading: tradesLoading } = useQuery<any[]>({
     queryKey: ["/dash/recent-trades"],
-    retry: false,
+    queryFn: defaultFetcher,
   });
 
-  // 2. New Data Streams from documentation
   const { data: notifications = [] } = useQuery<any[]>({
     queryKey: ["/dash/notification"],
-    retry: false,
+    queryFn: defaultFetcher,
   });
 
-  const { data: deposits = [] } = useQuery<any[]>({
+  const { data: deposits = [], isLoading: depLoading } = useQuery<any[]>({
     queryKey: ["/dash/deposits"],
-    retry: false,
+    queryFn: defaultFetcher,
   });
 
-  // 3. Dynamic Wallet Logic
-  // Mapping the static UI structure to the dynamic stats received from the API
+  const { data: withdrawals = [], isLoading: withLoading } = useQuery<any[]>({
+    queryKey: ["/dash/withdrawals"],
+    queryFn: defaultFetcher,
+  });
+
+  // 2. CALCULATE STATS DYNAMICALLY (Since /dash/stats doesn't exist)
+  const stats = useMemo(() => {
+    // Helper to safely parse numbers
+    const safeNum = (val: any) => parseFloat(val) || 0;
+
+    // A. Total Deposits
+    const totalDeposits = deposits.reduce((acc: number, d: any) => acc + safeNum(d.amount), 0);
+    
+    // B. Total Withdrawals
+    const totalWithdrawals = withdrawals.reduce((acc: number, w: any) => acc + safeNum(w.amount), 0);
+    
+    // C. Trading Profit/Loss
+    const totalPnL = recentTrades.reduce((acc: number, t: any) => acc + safeNum(t.profit_loss), 0);
+    
+    // D. Final Balance Calculation
+    const totalBalance = totalDeposits - totalWithdrawals + totalPnL;
+
+    // E. Win Rate Calculation
+    const winningTrades = recentTrades.filter((t: any) => safeNum(t.profit_loss) > 0).length;
+    const winRate = recentTrades.length > 0 
+      ? ((winningTrades / recentTrades.length) * 100).toFixed(1) 
+      : "0.0";
+
+    // F. Active Trades Count
+    const activeTrades = recentTrades.filter((t: any) => t.status === 'ACTIVE' || t.status === 'OPEN').length;
+
+    // G. Today's P&L (Mock logic: assuming recent trades are sorted or filtered by backend)
+    // For now, we'll just use total PnL of recent trades as "Today's" or similar
+    const todayPnL = totalPnL; 
+
+    return {
+      total_balance: totalBalance > 0 ? totalBalance : 0, // Prevent negative balance display if data is weird
+      today_pnl: todayPnL,
+      active_trades: activeTrades,
+      win_rate: winRate,
+      balance_change_percent: totalDeposits > 0 ? ((totalPnL / totalDeposits) * 100).toFixed(2) + "%" : "0.00%"
+    };
+  }, [deposits, withdrawals, recentTrades]);
+
+  const isLoading = tradesLoading || depLoading || withLoading;
+
+  // 3. Wallet Logic (Derived from calculated stats)
   const wallets = [
     { 
       name: "Arbitrage", 
       abbreviation: "AR", 
       type: "arb", 
-      balance: stats?.wallets?.arb?.balance || 0, 
-      value: stats?.wallets?.arb?.value || 0, 
-      change: stats?.wallets?.arb?.change || 0, 
+      balance: stats.total_balance * 0.4, // Simulating 40% allocation
+      value: stats.total_balance * 0.4, 
       color: "bg-purple-600", 
       link: "/arbitrage" 
     },
@@ -44,9 +107,8 @@ export default function Dashboard() {
       name: "Forex", 
       abbreviation: "FX", 
       type: "forex", 
-      balance: stats?.wallets?.forex?.balance || 0, 
-      value: stats?.wallets?.forex?.value || 0, 
-      change: stats?.wallets?.forex?.change || 0, 
+      balance: stats.total_balance * 0.3, // Simulating 30% allocation
+      value: stats.total_balance * 0.3, 
       color: "bg-blue-600", 
       link: "/forex" 
     },
@@ -54,9 +116,8 @@ export default function Dashboard() {
       name: "Futures", 
       abbreviation: "FU", 
       type: "fut", 
-      balance: stats?.wallets?.fut?.balance || 0, 
-      value: stats?.wallets?.fut?.value || 0, 
-      change: stats?.wallets?.fut?.change || 0, 
+      balance: stats.total_balance * 0.3, // Simulating 30% allocation
+      value: stats.total_balance * 0.3, 
       color: "bg-yellow-600", 
       link: "/futures" 
     },
@@ -73,14 +134,14 @@ export default function Dashboard() {
               <div className="w-10 h-10 rounded-lg border flex items-center justify-center bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
                 <i className="ri-wallet-3-line text-lg"></i>
               </div>
-              <div className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
-                {stats?.balance_change_percent || '+0.0%'}
+              <div className={`px-2 py-1 rounded-full text-xs font-medium ${parseFloat(stats.balance_change_percent) >= 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                {isLoading ? "..." : (parseFloat(stats.balance_change_percent) >= 0 ? '+' : '') + stats.balance_change_percent}
               </div>
             </div>
             <div>
               <h3 className="text-gray-400 text-xs font-medium mb-1">Total Balance</h3>
               <p className="text-white text-xl lg:text-2xl font-bold">
-                {statsLoading ? <Skeleton className="h-8 w-32" /> : `$${stats?.total_balance?.toLocaleString() || '0.00'}`}
+                {isLoading ? <Skeleton className="h-8 w-32 bg-gray-800" /> : `$${stats.total_balance.toLocaleString('en-US', {minimumFractionDigits: 2})}`}
               </p>
             </div>
           </Card>
@@ -92,9 +153,9 @@ export default function Dashboard() {
               </div>
             </div>
             <div>
-              <h3 className="text-gray-400 text-xs font-medium mb-1">Today's P&L</h3>
+              <h3 className="text-gray-400 text-xs font-medium mb-1">Total P&L</h3>
               <p className="text-white text-xl lg:text-2xl font-bold">
-                {statsLoading ? <Skeleton className="h-8 w-32" /> : `${(stats?.today_pnl || 0) >= 0 ? '+' : '-'}$${Math.abs(stats?.today_pnl || 0).toLocaleString()}`}
+                {isLoading ? <Skeleton className="h-8 w-32 bg-gray-800" /> : `${stats.today_pnl >= 0 ? '+' : '-'}$${Math.abs(stats.today_pnl).toLocaleString('en-US', {minimumFractionDigits: 2})}`}
               </p>
             </div>
           </Card>
@@ -108,7 +169,7 @@ export default function Dashboard() {
             <div>
               <h3 className="text-gray-400 text-xs font-medium mb-1">Active Trades</h3>
               <p className="text-white text-xl lg:text-2xl font-bold">
-                {statsLoading ? <Skeleton className="h-8 w-16" /> : stats?.active_trades || 0}
+                {isLoading ? <Skeleton className="h-8 w-16 bg-gray-800" /> : stats.active_trades}
               </p>
             </div>
           </Card>
@@ -122,7 +183,7 @@ export default function Dashboard() {
             <div>
               <h3 className="text-gray-400 text-xs font-medium mb-1">Win Rate</h3>
               <p className="text-white text-xl lg:text-2xl font-bold">
-                {statsLoading ? <Skeleton className="h-8 w-20" /> : `${stats?.win_rate || 0}%`}
+                {isLoading ? <Skeleton className="h-8 w-20 bg-gray-800" /> : `${stats.win_rate}%`}
               </p>
             </div>
           </Card>
@@ -138,11 +199,10 @@ export default function Dashboard() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
                   <div>
                     <h2 className="text-white text-lg font-bold">Wallet Overview</h2>
-                    <p className="text-gray-400 text-sm">Portfolio Value: ${stats?.total_balance?.toLocaleString() || '0.00'}</p>
+                    <p className="text-gray-400 text-sm">Portfolio Value: ${stats.total_balance.toLocaleString('en-US', {minimumFractionDigits: 2})}</p>
                   </div>
                   <div className="flex bg-gray-800 rounded-lg p-1 min-w-max">
-                    <button className="px-3 py-1.5 text-sm font-medium rounded-md bg-emerald-600 text-white">24h</button>
-                    <button className="px-3 py-1.5 text-sm font-medium rounded-md text-gray-400">7d</button>
+                    <button className="px-3 py-1.5 text-sm font-medium rounded-md bg-emerald-600 text-white">All Time</button>
                   </div>
                 </div>
               </div>
@@ -170,12 +230,12 @@ export default function Dashboard() {
                               <p className="text-white text-sm font-medium">{wallet.name}</p>
                             </div>
                           </td>
-                          <td className="text-right py-4 text-white text-sm">${wallet.balance.toFixed(2)}</td>
-                          <td className="text-right py-4 text-white text-sm font-medium">${wallet.value.toFixed(2)}</td>
+                          <td className="text-right py-4 text-white text-sm">${(wallet.balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                          <td className="text-right py-4 text-white text-sm font-medium">${(wallet.value || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                           <td className="text-right py-4">
                             <div className="flex justify-end space-x-2">
-                              <Link href={wallet.link} className="px-3 py-1.5 bg-emerald-600 text-white text-xs rounded">Trade</Link>
-                              <Link href="/wallet" className="px-3 py-1.5 bg-gray-700 text-white text-xs rounded">Transfer</Link>
+                              <Link href={wallet.link} className="px-3 py-1.5 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700">Trade</Link>
+                              <Link href="/wallet" className="px-3 py-1.5 bg-gray-700 text-white text-xs rounded hover:bg-gray-600">Transfer</Link>
                             </div>
                           </td>
                         </tr>
@@ -194,21 +254,21 @@ export default function Dashboard() {
               <div className="p-4 border-b border-gray-800">
                 <h3 className="text-white font-medium">Recent Trades</h3>
               </div>
-              <div className="p-4 max-h-[400px] overflow-y-auto no-scrollbar">
-                {tradesLoading ? (
+              <div className="p-4 max-h-[400px] overflow-y-auto custom-scrollbar">
+                {isLoading ? (
                   <Skeleton className="h-20 w-full bg-gray-800" />
                 ) : recentTrades.length === 0 ? (
                   <p className="text-gray-500 text-center py-4">No recent trades</p>
                 ) : (
-                  recentTrades.map((trade: any) => (
-                    <div key={trade.id} className="flex items-center justify-between p-3 mb-2 bg-gray-800/50 rounded-lg">
+                  recentTrades.map((trade: any, idx: number) => (
+                    <div key={trade.id || idx} className="flex items-center justify-between p-3 mb-2 bg-gray-800/50 rounded-lg">
                       <div>
-                        <p className="text-white font-medium text-sm">{trade.symbol}</p>
-                        <p className="text-gray-500 text-xs">{trade.side}</p>
+                        <p className="text-white font-medium text-sm">{trade.symbol || "Unknown Pair"}</p>
+                        <p className="text-gray-500 text-xs">{trade.side || "Trade"}</p>
                       </div>
                       <div className="text-right">
                         <p className={`text-sm font-medium ${(trade.profit_loss || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          ${Math.abs(trade.profit_loss || 0).toFixed(2)}
+                          ${Math.abs(parseFloat(trade.profit_loss) || 0).toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -224,12 +284,16 @@ export default function Dashboard() {
                 <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full">{notifications.length}</span>
               </div>
               <div className="p-4 space-y-3">
-                {notifications.slice(0, 3).map((n: any) => (
-                  <div key={n.id} className="border-l-2 border-emerald-500 pl-3 py-1">
-                    <p className="text-white text-xs font-medium">{n.action}</p>
-                    <p className="text-gray-500 text-[10px]">{new Date(n.created_at).toLocaleDateString()}</p>
-                  </div>
-                ))}
+                {notifications.length === 0 ? (
+                    <p className="text-gray-500 text-xs text-center">No new notifications</p>
+                ) : (
+                    notifications.slice(0, 3).map((n: any, idx: number) => (
+                    <div key={n.id || idx} className="border-l-2 border-emerald-500 pl-3 py-1">
+                        <p className="text-white text-xs font-medium">{n.action || n.details || "Notification"}</p>
+                        <p className="text-gray-500 text-[10px]">{n.created_at ? new Date(n.created_at).toLocaleDateString() : 'Just now'}</p>
+                    </div>
+                    ))
+                )}
               </div>
             </Card>
           </div>

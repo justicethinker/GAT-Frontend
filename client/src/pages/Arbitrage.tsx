@@ -1,22 +1,26 @@
 import { Layout } from "@/components/Layout";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Added
+import { Label } from "@/components/ui/label"; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // Added
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"; 
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+// --- CONFIGURATION ---
+const API_BASE = "https://gat-zm1r.onrender.com";
 
 // --- FETCHER FUNCTION ---
 const defaultFetcher = async ({ queryKey }: any) => {
   const [path, params] = queryKey;
   const searchParams = new URLSearchParams();
+  
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (Array.isArray(value)) {
@@ -30,7 +34,10 @@ const defaultFetcher = async ({ queryKey }: any) => {
   const queryString = searchParams.toString() ? "?" + searchParams.toString() : "";
   const token = sessionStorage.getItem("token");
   
-  const res = await fetch(`${path}${queryString}`, {
+  // Direct connection to backend
+  const url = `${API_BASE}${path}${queryString}`;
+
+  const res = await fetch(url, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -56,7 +63,7 @@ export default function Arbitrage() {
   const [autoExecute, setAutoExecute] = useState(false);
   const [emergencyStop, setEmergencyStop] = useState(false);
 
-  // --- NEW: Trade Execution State ---
+  // --- Trade Execution State ---
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedOpp, setSelectedOpp] = useState<any>(null);
   const [tradeQty, setTradeQty] = useState("0.01");
@@ -100,36 +107,65 @@ export default function Arbitrage() {
 
   const tradeHistory = Array.isArray(rawHistory) ? rawHistory : [];
 
+  // --- DYNAMIC STATS CALCULATIONS ---
+  const stats = useMemo(() => {
+    const totalPnL = tradeHistory.reduce((acc: number, t: any) => acc + (parseFloat(t.profit) || 0), 0);
+    const winningTrades = tradeHistory.filter((t: any) => (parseFloat(t.profit) || 0) > 0).length;
+    const winRate = tradeHistory.length > 0 ? ((winningTrades / tradeHistory.length) * 100).toFixed(1) : "0.0";
+    const activeTradesCount = tradeHistory.filter((t: any) => t.status === 'Active' || t.status === 'Pending').length;
+    
+    // Risk score is static (0) as API doesn't provide it yet
+    const riskScore = 0; 
+
+    return { totalPnL, winRate, activeTradesCount, riskScore };
+  }, [tradeHistory]);
+
+
   // --- MUTATIONS ---
   const executeTradeMutation = useMutation({
     mutationFn: async (tradeData: any) => {
-      return await apiRequest("POST", "/arb/perform-arb-trade", tradeData);
+      // Manual fetch here to ensure we hit the API_BASE directly
+      const token = sessionStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/arb/perform-arb-trade`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(tradeData)
+      });
+      if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Failed to execute trade");
+      }
+      return res.json();
     },
     onSuccess: () => {
       toast({ title: "Trade Executed", description: "Arbitrage trade placed successfully." });
       queryClient.invalidateQueries({ queryKey: ["/arb/user-arb"] });
-      setTradeModalOpen(false); // Close modal on success
+      setTradeModalOpen(false); 
     },
     onError: (error: any) => {
       toast({ title: "Execution Failed", description: error.message, variant: "destructive" });
     },
   });
 
-  // 1. Open the Modal
   const handleSetupTrade = (opp: any) => {
-    if(emergencyStop) return;
+    if(emergencyStop) {
+        toast({ title: "Emergency Stop Active", description: "Disable emergency stop to trade.", variant: "destructive" });
+        return;
+    }
     setSelectedOpp(opp);
     setTradeModalOpen(true);
   };
 
-  // 2. Confirm and Send to API
   const handleConfirmTrade = () => {
     if (!selectedOpp) return;
     executeTradeMutation.mutate({
       symbol: selectedOpp.symbol,
       buy_exchange: selectedOpp.exchange_buy,
       sell_exchange: selectedOpp.exchange_sell,
-      qty: parseFloat(tradeQty) // Use the input value
+      qty: parseFloat(tradeQty) 
     });
   };
 
@@ -144,11 +180,8 @@ export default function Arbitrage() {
     }
   };
 
-  // Mock Alerts
-  const priceAlerts = [
-    { pair: "BTC/USDT", exchange: "Binance", current: "$43,250", target: "$45,000", type: "Above", status: "Active", progress: 96 },
-    { pair: "ETH/USDT", exchange: "Coinbase", current: "$2,650", target: "$2,500", type: "Below", status: "Active", progress: 0 },
-  ];
+  // Removed Placeholder Alerts - Now using empty array since endpoint doesn't exist
+  const priceAlerts: any[] = []; 
 
   return (
     <Layout>
@@ -292,29 +325,14 @@ export default function Arbitrage() {
 
                     <div className="bg-emerald-900/20 border border-emerald-500/20 rounded-lg p-4 mb-4 text-center">
                         <p className="text-gray-400 text-xs mb-1">Total Portfolio</p>
-                        <h2 className="text-2xl font-bold text-white">$89,682.05</h2>
+                        {/* Placeholder Value: Could fetch from stats endpoint if available later */}
+                        <h2 className="text-2xl font-bold text-white">$ --.--</h2> 
                         <div className="flex justify-between mt-2 text-xs">
-                            <span className="text-emerald-400">+ $1,120.25 (24h)</span>
-                            <span className="text-emerald-400">+ 1.08%</span>
+                             {/* Static until portfolio endpoint exists */}
+                            <span className="text-emerald-400">-- (24h)</span>
                         </div>
                     </div>
 
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between p-2 bg-gray-800/30 rounded-lg">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xs">USDT</div>
-                                <div>
-                                    <p className="text-white text-sm font-medium">USDT</p>
-                                    <p className="text-gray-500 text-xs">Balance: 45,250</p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-white text-sm">$45,252</p>
-                                <p className="text-emerald-400 text-xs">+2.84%</p>
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div className="grid grid-cols-3 gap-2 mt-4">
                         <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs">Deposit</Button>
                         <Button size="sm" variant="outline" className="border-blue-600 text-blue-500 hover:bg-blue-600/10 h-8 text-xs">Withdraw</Button>
@@ -349,7 +367,7 @@ export default function Arbitrage() {
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-lg font-bold text-white">Real-Time Opportunities</h2>
                                 <div className="flex gap-4 text-center">
-                                    <div><p className="text-2xl font-bold text-white">{opportunities.length + (opportunitiesLoading ? 0 : 12)}</p><p className="text-xs text-gray-500">Scanned</p></div>
+                                    <div><p className="text-2xl font-bold text-white">{opportunities.length}</p><p className="text-xs text-gray-500">Scanned</p></div>
                                     <div><p className="text-2xl font-bold text-emerald-400">{opportunities.length}</p><p className="text-xs text-gray-500">Profitable</p></div>
                                     <div><p className="text-2xl font-bold text-blue-400">{tradeHistory.length}</p><p className="text-xs text-gray-500">Executed</p></div>
                                 </div>
@@ -381,17 +399,6 @@ export default function Arbitrage() {
                                       value={minProfit} 
                                       onChange={(e) => setMinProfit(parseFloat(e.target.value))} 
                                     />
-                                </div>
-                            </div>
-
-                            <div className="flex gap-2 mt-4">
-                                <Button size="sm" className="bg-emerald-600 text-white text-xs"><i className="ri-money-dollar-circle-line mr-1"></i> Profit</Button>
-                                <Button size="sm" variant="outline" className="border-gray-700 text-gray-400 text-xs"><i className="ri-bar-chart-line mr-1"></i> Spread</Button>
-                                <div className="ml-auto">
-                                    <Select defaultValue="all">
-                                        <SelectTrigger className="bg-gray-800 border-gray-700 h-8 text-xs w-[120px]"><SelectValue placeholder="Risk Level" /></SelectTrigger>
-                                        <SelectContent className="bg-gray-800 border-gray-700 text-white"><SelectItem value="all">All Levels</SelectItem></SelectContent>
-                                    </Select>
                                 </div>
                             </div>
                         </Card>
@@ -429,7 +436,7 @@ export default function Arbitrage() {
                                                       <Button 
                                                         size="sm" 
                                                         className="bg-emerald-600 h-7 text-xs hover:bg-emerald-700"
-                                                        onClick={() => handleSetupTrade(opp)} // CLICK HERE OPENS THE MODAL
+                                                        onClick={() => handleSetupTrade(opp)} 
                                                       >
                                                         Execute
                                                       </Button>
@@ -446,32 +453,18 @@ export default function Arbitrage() {
                     {/* === TAB 2: PRICE ALERTS === */}
                     <TabsContent value="alerts" className="space-y-4">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold text-white flex gap-2">Price Alerts <span className="bg-emerald-500/20 text-emerald-400 text-xs px-2 py-1 rounded-full">2 Active</span></h2>
+                            <h2 className="text-lg font-bold text-white flex gap-2">Price Alerts <span className="bg-emerald-500/20 text-emerald-400 text-xs px-2 py-1 rounded-full">{priceAlerts.length} Active</span></h2>
                             <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"><i className="ri-add-line mr-2"></i> Create Alert</Button>
                         </div>
-                        {priceAlerts.map((alert, idx) => (
-                            <Card key={idx} className="bg-gray-900 border-gray-800 p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-                                <div className="flex items-center gap-4 w-full md:w-1/3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${alert.type === 'Above' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                        <i className={`ri-arrow-${alert.type === 'Above' ? 'up' : 'down'}-line text-xl`}></i>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-white font-bold">{alert.pair} <span className="ml-2 text-xs bg-gray-800 text-emerald-400 px-2 py-0.5 rounded">Active</span></h3>
-                                        <p className="text-gray-500 text-xs">{alert.exchange}</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-3 gap-8 w-full md:w-1/3 text-center md:text-left">
-                                    <div><p className="text-gray-500 text-xs">Current Price</p><p className="text-white font-mono">{alert.current}</p></div>
-                                    <div><p className="text-gray-500 text-xs">Target Price</p><p className="text-white font-mono">{alert.target}</p></div>
-                                    <div><p className="text-gray-500 text-xs">Alert Type</p><p className={alert.type === 'Above' ? 'text-emerald-400' : 'text-red-400'}>{alert.type}</p></div>
-                                </div>
-                                <div className="flex gap-2 w-full md:w-auto justify-end">
-                                    <div className="w-24 mr-4 flex flex-col justify-center"><div className="h-1.5 bg-gray-700 rounded-full w-full"><div className="h-full bg-emerald-500 rounded-full" style={{width: `${alert.progress}%`}}></div></div><p className="text-[10px] text-right text-gray-500 mt-1">{alert.progress}%</p></div>
-                                    <Button size="sm" className="bg-yellow-600/20 text-yellow-500 border border-yellow-600/50 hover:bg-yellow-600/30"><i className="ri-pause-line mr-1"></i> Pause</Button>
-                                    <Button size="sm" className="bg-red-600/20 text-red-500 border border-red-600/50 hover:bg-red-600/30"><i className="ri-delete-bin-line mr-1"></i> Delete</Button>
-                                </div>
-                            </Card>
-                        ))}
+                        {priceAlerts.length === 0 ? (
+                             <div className="text-center py-10 text-gray-500 bg-gray-900 border border-gray-800 rounded-lg">No active alerts configured.</div>
+                        ) : (
+                            priceAlerts.map((alert, idx) => (
+                                <Card key={idx} className="bg-gray-900 border-gray-800 p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                                    {/* Alert rendering logic would go here if endpoint existed */}
+                                </Card>
+                            ))
+                        )}
                     </TabsContent>
 
                     {/* === TAB 3: RISK MANAGEMENT === */}
@@ -487,27 +480,24 @@ export default function Arbitrage() {
                             </Button>
                         </div>
 
-                        {/* Top Stats */}
+                        {/* Top Stats - CALCULATED FROM REAL HISTORY */}
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                             <Card className="bg-gray-900 border-gray-800 p-4">
                                 <div className="flex justify-between items-start mb-2"><span className="text-gray-400 text-xs">Risk Score</span><i className="ri-shield-line text-gray-500"></i></div>
-                                <h3 className="text-2xl font-bold text-red-500">65</h3>
-                                <div className="w-full h-1.5 bg-gray-800 rounded-full mt-2"><div className="h-full bg-red-500 rounded-full w-[65%]"></div></div>
+                                <h3 className="text-2xl font-bold text-gray-500">N/A</h3>
+                                <div className="w-full h-1.5 bg-gray-800 rounded-full mt-2"><div className="h-full bg-gray-600 rounded-full w-[0%]"></div></div>
                             </Card>
                             <Card className="bg-gray-900 border-gray-800 p-4">
-                                <div className="flex justify-between items-start mb-2"><span className="text-gray-400 text-xs">Daily P&L</span><i className="ri-line-chart-line text-gray-500"></i></div>
-                                <h3 className="text-2xl font-bold text-emerald-400">+$450.00</h3>
-                                <p className="text-xs text-gray-500">Limit: $1,000</p>
+                                <div className="flex justify-between items-start mb-2"><span className="text-gray-400 text-xs">Total P&L</span><i className="ri-line-chart-line text-gray-500"></i></div>
+                                <h3 className={`text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>${stats.totalPnL.toFixed(2)}</h3>
                             </Card>
                             <Card className="bg-gray-900 border-gray-800 p-4">
                                 <div className="flex justify-between items-start mb-2"><span className="text-gray-400 text-xs">Active Trades</span><i className="ri-exchange-dollar-line text-gray-500"></i></div>
-                                <h3 className="text-2xl font-bold text-white">3/5</h3>
-                                <p className="text-xs text-gray-500">Exposure: $25,000</p>
+                                <h3 className="text-2xl font-bold text-white">{stats.activeTradesCount}</h3>
                             </Card>
                             <Card className="bg-gray-900 border-gray-800 p-4">
                                 <div className="flex justify-between items-start mb-2"><span className="text-gray-400 text-xs">Win Rate</span><i className="ri-trophy-line text-gray-500"></i></div>
-                                <h3 className="text-2xl font-bold text-emerald-400">72.5%</h3>
-                                <p className="text-xs text-gray-500">Sharpe: 1.85</p>
+                                <h3 className="text-2xl font-bold text-emerald-400">{stats.winRate}%</h3>
                             </Card>
                         </div>
 
@@ -556,31 +546,6 @@ export default function Arbitrage() {
                                 </div>
                             </div>
                         )}
-
-                        {/* Performance Analysis */}
-                        <div>
-                             <h4 className="text-white text-sm font-bold mb-4 flex items-center gap-2"><i className="ri-bar-chart-grouped-line"></i> Performance Analysis</h4>
-                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                                <div className="bg-gray-900 border border-gray-800 p-4 rounded-lg">
-                                    <p className="text-xs text-gray-500 mb-1">Average Profit</p>
-                                    <div className="flex justify-between items-center"><span className="text-xl font-bold text-emerald-400">+$125.50</span><i className="ri-arrow-up-line text-emerald-500"></i></div>
-                                </div>
-                                <div className="bg-gray-900 border border-gray-800 p-4 rounded-lg">
-                                    <p className="text-xs text-gray-500 mb-1">Average Loss</p>
-                                    <div className="flex justify-between items-center"><span className="text-xl font-bold text-red-400">-$85.25</span><i className="ri-arrow-down-line text-red-500"></i></div>
-                                </div>
-                                <div className="bg-gray-900 border border-gray-800 p-4 rounded-lg">
-                                    <p className="text-xs text-gray-500 mb-1">Current Drawdown</p>
-                                    <span className="text-xl font-bold text-yellow-500">$1250.00</span>
-                                </div>
-                             </div>
-                             <div className="flex gap-4">
-                                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"><i className="ri-save-line mr-2"></i> Save Settings</Button>
-                                <Button variant="outline" className="border-blue-600 text-blue-400 hover:bg-blue-600/10"><i className="ri-download-line mr-2"></i> Export Report</Button>
-                                <Button variant="ghost" className="text-gray-400 hover:text-white"><i className="ri-refresh-line mr-2"></i> Reset to Default</Button>
-                             </div>
-                        </div>
-
                     </TabsContent>
                 </Tabs>
             </div>
@@ -592,15 +557,19 @@ export default function Arbitrage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <Card className="bg-gray-900 border-gray-800 p-4">
                     <p className="text-xs text-gray-500 mb-1">Gross P&L</p>
-                    <h3 className="text-2xl font-bold text-emerald-400">+$94.15</h3>
+                    <h3 className={`text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toFixed(2)}
+                    </h3>
                 </Card>
                 <Card className="bg-gray-900 border-gray-800 p-4">
-                    <p className="text-xs text-gray-500 mb-1">Total Fees</p>
-                    <h3 className="text-2xl font-bold text-red-400">-$21.25</h3>
+                    <p className="text-xs text-gray-500 mb-1">Total Trades</p>
+                    <h3 className="text-2xl font-bold text-blue-400">{tradeHistory.length}</h3>
                 </Card>
                 <Card className="bg-gray-900 border-gray-800 p-4">
                     <p className="text-xs text-gray-500 mb-1">Net P&L</p>
-                    <h3 className="text-2xl font-bold text-emerald-400">+$72.90</h3>
+                    <h3 className={`text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toFixed(2)}
+                    </h3>
                 </Card>
             </div>
 
@@ -618,8 +587,8 @@ export default function Arbitrage() {
                                     <p className="text-xs text-gray-500 mt-1">Status: {trade.status || 'Active'}</p>
                                 </div>
                                 <div className="text-right">
-                                    <h3 className={`font-bold text-xl ${trade.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        {trade.profit >= 0 ? '+' : ''}${trade.profit}
+                                    <h3 className={`font-bold text-xl ${parseFloat(trade.profit) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {parseFloat(trade.profit) >= 0 ? '+' : ''}${parseFloat(trade.profit).toFixed(2)}
                                     </h3>
                                 </div>
                             </div>
