@@ -567,12 +567,19 @@ const Admin = () => {
   };
 
   const toggleItem = (category: 'arbitrage' | 'futures', key: 'exchanges' | 'pairs', item: string) => {
-    const list = tradingConfig[category][key] as string[];
-    const newList = list.includes(item) ? list.filter(i => i !== item) : [...list, item];
-    setTradingConfig({
-      ...tradingConfig,
-      [category]: { ...tradingConfig[category], [key]: newList }
-    });
+    if (category === 'arbitrage' && key === 'exchanges') {
+      const list = tradingConfig.arbitrage.exchanges;
+      const newList = list.includes(item) ? list.filter(i => i !== item) : [...list, item];
+      setTradingConfig(prev => ({ ...prev, arbitrage: { ...prev.arbitrage, exchanges: newList } }));
+      return;
+    }
+
+    if (category === 'futures' && key === 'pairs') {
+      const list = tradingConfig.futures.pairs;
+      const newList = list.includes(item) ? list.filter(i => i !== item) : [...list, item];
+      setTradingConfig(prev => ({ ...prev, futures: { ...prev.futures, pairs: newList } }));
+      return;
+    }
   };
 
   // System Handlers

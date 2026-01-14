@@ -17,13 +17,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 const API_BASE = "https://gat-zm1r.onrender.com";
 
 // --- TYPES ---
+// FIX: Updated to match your backend response image (unnamed.jpg) exactly
 interface Opportunity {
   symbol: string;
-  exchange_buy: string;
-  exchange_sell: string;
-  price_buy: number;
-  price_sell: number;
-  profit_percentage: number;
+  buy_exchange: string;
+  sell_exchange: string;
+  buy_price: number;      // Fixed: matches backend
+  sell_price: number;     // Fixed: matches backend
+  profit_percent: number; // Fixed: matches backend
 }
 
 interface TradeHistoryItem {
@@ -35,7 +36,8 @@ interface TradeHistoryItem {
   status: 'PENDING' | 'COMPLETED' | 'ACTIVE';
 }
 
-// --- FETCHER UTILITY ---
+// --- UTILITIES ---
+
 const defaultFetcher = async ({ queryKey, signal }: { queryKey: any[]; signal?: AbortSignal }) => {
   const [path, params] = queryKey;
   const url = new URL(`${API_BASE}${path}`);
@@ -62,8 +64,10 @@ const defaultFetcher = async ({ queryKey, signal }: { queryKey: any[]; signal?: 
 
   let data;
   try {
-    data = await res.json();
+    const text = await res.text();
+    data = text ? JSON.parse(text) : {};
   } catch (e) {
+    console.error("JSON Parse Error", e);
     data = {};
   }
 
@@ -77,14 +81,15 @@ export default function Arbitrage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // --- STATE: APP ---
+  const [activeWallet, setActiveWallet] = useState<'arb' | 'forex' | 'fut'>('arb');
+
   // --- STATE: SCANNER ---
   const [selectedExchanges, setSelectedExchanges] = useState<string[]>(["BYBIT", "MEXC", "BINANCE"]);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>(["BTCUSDT", "ETHUSDT"]);
   const [minProfit, setMinProfit] = useState(0.001);
   const [isScannerRunning, setIsScannerRunning] = useState(false);
   const [emergencyStop, setEmergencyStop] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [autoExecute, setAutoExecute] = useState(false);
 
   // --- STATE: MODALS ---
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
@@ -99,7 +104,7 @@ export default function Arbitrage() {
   const [depositData, setDepositData] = useState({ amount: "", currency: "USDT", receipt: null as File | null });
   const [withdrawData, setWithdrawData] = useState({ amount: "", currency: "USDT", address: "" });
 
-  // --- STATE: RISK (Hidden) ---
+  // --- RISK STATE (Hidden) ---
   const [riskSettings, setRiskSettings] = useState(() => {
     const defaults = { maxPos: "1000", maxDailyLoss: "100", stopLoss: "2", takeProfit: "5" };
     const saved = localStorage.getItem("arb_risk_settings");
@@ -115,26 +120,87 @@ export default function Arbitrage() {
   }, [riskSettings]);
 
   // --- QUERIES ---
+
+  // 1. User Info (Balances)
+  const { data: userInfo, isLoading: isLoadingUser } = useQuery({
+    queryKey: ["/auth/user-info"],
+    queryFn: defaultFetcher,
+    refetchInterval: 10000, 
+  });
+
+  // 2. Exchange List
   const { data: exchangeList = [] } = useQuery({
     queryKey: ["/arb/arbitrage-exc"],
     queryFn: defaultFetcher,
     staleTime: 60000,
   });
 
-  useEffect(() => {
-    if (exchangeList?.length > 0 && selectedExchanges.length === 0) {
-      // Auto-init logic if needed
-    }
-  }, [exchangeList, selectedExchanges.length]);
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // 3. Symbol List
   const { data: symbolList = [] } = useQuery({
     queryKey: ["/arb/arbitrage-symbol"],
     queryFn: defaultFetcher,
     staleTime: 60000,
   });
 
-  // SCANNER QUERY
+  // Helpers
+  const getExchangeName = (ex: any) => (typeof ex === 'object' ? ex.name : ex);
+  // Backend returns { "name": "BTCUSDT" }
+  const getSymbolName = (sym: any) => {
+    if (typeof sym === 'string') return sym;
+    if (typeof sym === 'object' && sym !== null) return sym.name; 
+    return '';
+  };
+
+  // --- COMPUTED: WALLET BALANCE ---
+  const currentBalance = useMemo(() => {
+    if (!userInfo) return 0;
+    const bal = userInfo[activeWallet] ?? userInfo[`${activeWallet}_balance`] ?? userInfo?.wallet?.[activeWallet] ?? 0;
+    return parseFloat(bal) || 0;
+  }, [userInfo, activeWallet]);
+
+  // --- COMPUTED: SELECTION STATES ---
+  const allExchangeNames = useMemo(() => exchangeList.map(getExchangeName), [exchangeList]);
+  const isAllExchangesSelected = exchangeList.length > 0 && selectedExchanges.length === exchangeList.length;
+
+  const allSymbolNames = useMemo(() => symbolList.map(getSymbolName), [symbolList]);
+  const isAllSymbolsSelected = symbolList.length > 0 && selectedSymbols.length === symbolList.length;
+
+  // --- TOGGLE HANDLERS ---
+  const toggleSelectAllExchanges = () => {
+    if (isScannerRunning) return;
+    if (isAllExchangesSelected) {
+      setSelectedExchanges([]); 
+    } else {
+      setSelectedExchanges(allExchangeNames);
+    }
+  };
+
+  const toggleSelectAllSymbols = () => {
+    if (isScannerRunning) return;
+    if (isAllSymbolsSelected) {
+      setSelectedSymbols([]); 
+    } else {
+      setSelectedSymbols(allSymbolNames);
+    }
+  };
+
+  const toggleExchange = (exName: string) => {
+    if (isScannerRunning) return;
+    setSelectedExchanges(prev => prev.includes(exName) ? prev.filter(e => e !== exName) : [...prev, exName]);
+  };
+
+  const toggleSymbol = (symName: string) => {
+    if (isScannerRunning) return;
+    setSelectedSymbols(prev => prev.includes(symName) ? prev.filter(s => s !== symName) : [...prev, symName]);
+  };
+
+  const cycleWallet = () => {
+    const wallets: ('arb' | 'forex' | 'fut')[] = ['arb', 'forex', 'fut'];
+    const nextIndex = (wallets.indexOf(activeWallet) + 1) % wallets.length;
+    setActiveWallet(wallets[nextIndex]);
+  };
+
+  // --- SCANNER QUERY ---
   const { data: rawOpportunities, isLoading: isScanning } = useQuery({
     queryKey: [
       "/arb/opportunity-scanner",
@@ -146,18 +212,27 @@ export default function Arbitrage() {
     ],
     queryFn: defaultFetcher,
     enabled: isScannerRunning && !emergencyStop && !tradeModalOpen,
-    refetchInterval: 120000, // FIXED: 2 minutes (120,000ms)
+    refetchInterval: 120000,
     retry: false,
   });
 
-  const opportunities: Opportunity[] = Array.isArray(rawOpportunities) ? rawOpportunities : [];
+  // FIX: Extract opportunities correctly from backend object structure
+  // Backend returns: { "opportunities": [ ... ] }
+  const opportunities: Opportunity[] = useMemo(() => {
+    if (!rawOpportunities) return [];
+    // If backend returns object with 'opportunities' key (as seen in screenshot)
+    if (rawOpportunities.opportunities && Array.isArray(rawOpportunities.opportunities)) {
+      return rawOpportunities.opportunities;
+    }
+    // Fallback if backend changes to direct array
+    if (Array.isArray(rawOpportunities)) return rawOpportunities;
+    return [];
+  }, [rawOpportunities]);
 
   useEffect(() => {
     if (tradeModalOpen && selectedOpp && opportunities.length > 0) {
       const updatedOpp = opportunities.find(o => o.symbol === selectedOpp.symbol);
-      if (updatedOpp) {
-        setSelectedOpp(updatedOpp);
-      }
+      if (updatedOpp) setSelectedOpp(updatedOpp);
     }
   }, [opportunities, tradeModalOpen, selectedOpp?.symbol]);
 
@@ -196,13 +271,9 @@ export default function Arbitrage() {
         },
         body: JSON.stringify(data),
       });
-      
       let responseData;
       try { responseData = await res.json(); } catch { responseData = {}; }
-
-      if (!res.ok) {
-        throw new Error(responseData.detail || "Trade failed");
-      }
+      if (!res.ok) throw new Error(responseData.detail || "Trade failed");
       return responseData;
     },
     onSuccess: () => {
@@ -225,14 +296,15 @@ export default function Arbitrage() {
           to_wallet: transferData.to
         }),
       });
-      if (!res.ok) throw new Error("Transfer failed");
+      if (!res.ok) throw new Error((await res.json()).detail || "Transfer failed");
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Transfer Successful", description: `$${transferData.amount} moved to ${transferData.to}` });
       setWalletModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] }); 
     },
-    onError: () => toast({ title: "Error", description: "Transfer failed.", variant: "destructive" })
+    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
   });
 
   const depositMutation = useMutation({
@@ -248,14 +320,14 @@ export default function Arbitrage() {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: formData,
       });
-      if (!res.ok) throw new Error("Deposit failed");
+      if (!res.ok) throw new Error((await res.json()).detail || "Deposit failed");
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Deposit Submitted", description: "Awaiting admin approval." });
       setWalletModalOpen(false);
     },
-    onError: () => toast({ title: "Error", description: "Deposit failed.", variant: "destructive" })
+    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
   });
 
   const withdrawMutation = useMutation({
@@ -270,14 +342,14 @@ export default function Arbitrage() {
           wallet_address: withdrawData.address
         }),
       });
-      if (!res.ok) throw new Error("Withdrawal failed");
+      if (!res.ok) throw new Error((await res.json()).detail || "Withdrawal failed");
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Withdrawal Requested", description: "Processing request." });
       setWalletModalOpen(false);
     },
-    onError: () => toast({ title: "Error", description: "Withdrawal failed.", variant: "destructive" })
+    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
   });
 
   // --- HANDLERS ---
@@ -292,23 +364,24 @@ export default function Arbitrage() {
 
   const confirmTrade = () => {
     if (!selectedOpp) return;
-    
     const qty = parseFloat(tradeQty);
     if (isNaN(qty) || qty <= 0) {
       toast({ title: "Invalid Quantity", description: "Please enter a valid positive number.", variant: "destructive" });
       return;
     }
-
     tradeMutation.mutate({
       symbol: selectedOpp.symbol,
-      buy_exchange: selectedOpp.exchange_buy,
-      sell_exchange: selectedOpp.exchange_sell,
+      buy_exchange: selectedOpp.buy_exchange, // Match new type
+      sell_exchange: selectedOpp.sell_exchange, // Match new type
       qty: qty
     });
   };
 
   const openWalletModal = (action: "deposit" | "withdraw" | "transfer") => {
     setWalletAction(action);
+    if (action === 'transfer') {
+      setTransferData(prev => ({ ...prev, from: activeWallet }));
+    }
     setWalletModalOpen(true);
   };
 
@@ -323,23 +396,19 @@ export default function Arbitrage() {
     const amount = parseFloat(currentData.amount);
     
     if (isNaN(amount) || amount <= 0) {
-       toast({ title: "Invalid Amount", variant: "destructive" });
+       toast({ title: "Invalid Amount", description: "Please enter a positive number.", variant: "destructive" });
        return;
     }
-
+    if (walletAction === 'deposit' && !depositData.receipt) {
+       toast({ title: "Missing Receipt", description: "Please upload a receipt image.", variant: "destructive" });
+       return;
+    }
     actions[walletAction]();
   };
 
-  const toggleExchange = (exName: string) => {
-    if (isScannerRunning) return;
-    setSelectedExchanges(prev => prev.includes(exName) ? prev.filter(e => e !== exName) : [...prev, exName]);
-  };
-
-  const getExchangeName = (ex: any) => (typeof ex === 'object' ? ex.name : ex);
-
   return (
     <Layout>
-      <div className="w-full max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <div className="w-full min-h-screen bg-gray-950 px-4 py-6 space-y-6">
 
         {/* --- HEADER --- */}
         <Card className="bg-gray-900 border-gray-800 p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
@@ -363,25 +432,24 @@ export default function Arbitrage() {
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 relative">
           
           {/* --- SIDEBAR --- */}
-          {/* Sticky positioning keeps it visible on scroll */}
-          <div className="space-y-6 lg:col-span-1 sticky top-6 self-start">
+          <div className="lg:col-span-1 sticky top-6 h-[calc(100vh-40px)] overflow-y-auto pr-2 space-y-4 flex flex-col custom-scrollbar">
             
-            {/* 2. EXCHANGES (Reordered: Above Wallet) */}
-            <Card className="bg-gray-900 border-gray-800 p-5">
-              <div className="flex justify-between items-center mb-4">
+            {/* 1. EXCHANGES */}
+            <Card className="bg-gray-900 border-gray-800 p-5 shrink-0 flex flex-col h-[32vh] min-h-[250px]">
+              <div className="flex justify-between items-center mb-4 shrink-0">
                 <h3 className="font-bold text-white">Exchanges</h3>
                 <span 
-                  onClick={() => !isScannerRunning && setSelectedExchanges(exchangeList.map(getExchangeName))} 
+                  onClick={toggleSelectAllExchanges} 
                   className={`text-xs text-emerald-400 cursor-pointer hover:underline ${isScannerRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  Select All
+                  {isAllExchangesSelected ? "Deselect All" : "Select All"}
                 </span>
               </div>
-              {/* FIXED: Constrained height with max-h so it doesn't push wallet off screen */}
-              <ScrollArea className="h-[250px] max-h-[40vh] pr-3">
-                <div className={`space-y-2 ${isScannerRunning ? 'opacity-50 pointer-events-none' : ''}`}>
+              <ScrollArea className="flex-1 pr-3 -mr-3">
+                <div className={`space-y-2 pr-3 pb-2 ${isScannerRunning ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {exchangeList.length === 0 ? <div className="text-gray-500 text-xs text-center pt-10">Loading exchanges...</div> : null}
                   {exchangeList.map((ex: any, i: number) => {
                     const name = getExchangeName(ex);
                     const isSelected = selectedExchanges.includes(name);
@@ -395,18 +463,53 @@ export default function Arbitrage() {
                   })}
                 </div>
               </ScrollArea>
-              {isScannerRunning && <p className="text-xs text-center text-yellow-500/70 mt-4">Stop scanner to edit filters</p>}
             </Card>
 
-            {/* Wallet Card */}
-            <Card className="bg-gray-900 border-gray-800 p-5 space-y-4">
+            {/* 2. SYMBOLS */}
+            <Card className="bg-gray-900 border-gray-800 p-5 shrink-0 flex flex-col h-[32vh] min-h-[250px]">
+              <div className="flex justify-between items-center mb-4 shrink-0">
+                <h3 className="font-bold text-white">Symbols</h3>
+                <span 
+                  onClick={toggleSelectAllSymbols} 
+                  className={`text-xs text-emerald-400 cursor-pointer hover:underline ${isScannerRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {isAllSymbolsSelected ? "Deselect All" : "Select All"}
+                </span>
+              </div>
+              <ScrollArea className="flex-1 pr-3 -mr-3">
+                <div className={`space-y-2 pr-3 pb-2 ${isScannerRunning ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {symbolList.length === 0 ? <div className="text-gray-500 text-xs text-center pt-10">Loading symbols...</div> : null}
+                  {symbolList.map((sym: any, i: number) => {
+                    const name = getSymbolName(sym);
+                    const isSelected = selectedSymbols.includes(name);
+                    return (
+                      <div key={i} onClick={() => toggleSymbol(name)}
+                        className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-emerald-900/20 border border-emerald-500/30' : 'hover:bg-gray-800 border border-transparent'}`}>
+                        <span className={`text-sm ${isSelected ? 'text-emerald-300' : 'text-gray-400'}`}>{name}</span>
+                        {isSelected && <i className="ri-check-line text-emerald-400"></i>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </ScrollArea>
+            </Card>
+
+            {/* 3. WALLET */}
+            <Card className="bg-gray-900 border-gray-800 p-5 space-y-4 shrink-0">
               <div className="flex justify-between items-center">
                 <h3 className="font-bold text-white flex items-center gap-2"><i className="ri-wallet-3-line"></i> Wallet</h3>
-                <Badge variant="outline" className="border-gray-700 text-gray-400">Arb</Badge>
+                <Badge 
+                  variant="outline" 
+                  onClick={cycleWallet}
+                  className="border-gray-700 text-emerald-400 cursor-pointer hover:bg-emerald-900/20 hover:border-emerald-500/50 transition-all select-none capitalize"
+                >
+                  {activeWallet}
+                </Badge>
               </div>
               <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-4 border border-gray-700 text-center">
-                <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Balance</p>
-                <h2 className="text-3xl font-bold text-white tracking-tight">$ --.--</h2>
+                <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">{activeWallet} Balance</p>
+                <h2 className="text-3xl font-bold text-white tracking-tight">
+                  {isLoadingUser ? <span className="animate-pulse">...</span> : `$${currentBalance.toFixed(2)}`}
+                </h2>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <Button variant="outline" size="sm" onClick={() => openWalletModal("deposit")} className="border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/10 text-xs">Deposit</Button>
@@ -422,8 +525,6 @@ export default function Arbitrage() {
             <Tabs defaultValue="scanner" className="w-full">
               <TabsList className="bg-gray-900 border border-gray-800 p-1">
                 <TabsTrigger value="scanner" className="data-[state=active]:bg-emerald-600">Scanner</TabsTrigger>
-                {/* 3. HIDDEN RISK MANAGEMENT (Commented Out) */}
-                {/* <TabsTrigger value="risk" className="data-[state=active]:bg-emerald-600">Risk Management</TabsTrigger> */}
               </TabsList>
 
               {/* SCANNER TAB */}
@@ -445,7 +546,6 @@ export default function Arbitrage() {
                   <Card className="bg-gray-900 border-gray-800 p-4 flex flex-col justify-center">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs text-gray-400">Min Profit</Label>
-                      {/* 1. FIXED: Input with 'no-spin' appearance to look like standard text entry */}
                       <Input
                         type="number"
                         disabled={isScannerRunning}
@@ -480,13 +580,14 @@ export default function Arbitrage() {
                             <tr key={idx} className="hover:bg-gray-800/50 transition-colors">
                               <td className="p-4 font-medium text-white">{opp.symbol}</td>
                               <td className="p-4 text-sm text-gray-400">
-                                <span className="text-blue-400">{opp.exchange_buy}</span> <i className="ri-arrow-right-line px-1"></i> <span className="text-purple-400">{opp.exchange_sell}</span>
+                                <span className="text-blue-400">{opp.buy_exchange}</span> <i className="ri-arrow-right-line px-1"></i> <span className="text-purple-400">{opp.sell_exchange}</span>
                               </td>
                               <td className="p-4 text-right font-mono text-xs text-gray-300">
-                                ${opp.price_buy} / ${opp.price_sell}
+                                ${opp.buy_price} / ${opp.sell_price}
                               </td>
+                              {/* FIX: Corrected property access for profit percent */}
                               <td className="p-4 text-right font-bold text-emerald-400">
-                                +{opp.profit_percentage.toFixed(2)}%
+                                +{opp.profit_percent ? (opp.profit_percent * 100).toFixed(2) : 0}%
                               </td>
                               <td className="p-4 text-right">
                                 <Button size="sm" onClick={() => handleTradeClick(opp)} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs">Trade</Button>
@@ -499,9 +600,6 @@ export default function Arbitrage() {
                   </div>
                 </Card>
               </TabsContent>
-
-              {/* RISK MANAGEMENT HIDDEN */}
-              {/* <TabsContent value="risk">...</TabsContent> */}
             </Tabs>
 
             {/* HISTORY SECTION */}
@@ -540,17 +638,17 @@ export default function Arbitrage() {
           {selectedOpp && (
             <div className="space-y-4 py-2">
               <div className="flex justify-between p-3 bg-gray-800 rounded border border-gray-700">
-                <div className="text-center"><div className="text-xs text-gray-400">Buy</div><div className="font-bold text-blue-400">{selectedOpp.exchange_buy}</div></div>
-                <div className="text-center"><div className="text-xs text-gray-400">Sell</div><div className="font-bold text-purple-400">{selectedOpp.exchange_sell}</div></div>
-                <div className="text-center"><div className="text-xs text-gray-400">Spread</div><div className="font-bold text-emerald-400">{selectedOpp.profit_percentage.toFixed(2)}%</div></div>
+                <div className="text-center"><div className="text-xs text-gray-400">Buy</div><div className="font-bold text-blue-400">{selectedOpp.buy_exchange}</div></div>
+                <div className="text-center"><div className="text-xs text-gray-400">Sell</div><div className="font-bold text-purple-400">{selectedOpp.sell_exchange}</div></div>
+                {/* FIX: Corrected property access in modal */}
+                <div className="text-center"><div className="text-xs text-gray-400">Spread</div><div className="font-bold text-emerald-400">{(selectedOpp.profit_percent * 100).toFixed(2)}%</div></div>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 text-center">
-                 <span>Buy @ {selectedOpp.price_buy}</span>
-                 <span>Sell @ {selectedOpp.price_sell}</span>
+                 <span>Buy @ {selectedOpp.buy_price}</span>
+                 <span>Sell @ {selectedOpp.sell_price}</span>
               </div>
               <div>
                 <Label>Quantity ({selectedOpp.symbol.replace("USDT", "")})</Label>
-                {/* Fixed: Input with no spinners */}
                 <Input 
                   type="number" 
                   value={tradeQty} 
@@ -620,7 +718,6 @@ export default function Arbitrage() {
               <>
                 <div>
                   <Label>Amount</Label>
-                  {/* Fixed: Input with no spinners */}
                   <Input 
                     type="number" 
                     value={depositData.amount} 
@@ -637,7 +734,6 @@ export default function Arbitrage() {
               <>
                 <div>
                   <Label>Amount</Label>
-                  {/* Fixed: Input with no spinners */}
                   <Input 
                     type="number" 
                     value={withdrawData.amount} 

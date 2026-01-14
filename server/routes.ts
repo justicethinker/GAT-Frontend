@@ -1,12 +1,17 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
+import FormData from "form-data";
+import multer from "multer";
+
+// Configure multer for handling file uploads in memory
+const upload = multer({ storage: multer.memoryStorage() });
 
 const API_BASE_URL = "https://gat-zm1r.onrender.com";
+const ADMIN_ID = process.env.ADMIN_ID ?? "tradeproadmin2025";
 
-// ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-// ADMIN CONFIGURATION
-// ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-const ADMIN_ID = process.env.ADMIN_ID ?? "tradeproadmin2025"; 
-
+/**
+ * Robust Proxy Request Handler
+ * Supports: JSON, URLSearchParams (x-www-form-urlencoded), and FormData (multipart)
+ */
 async function proxyRequest(
   url: string,
   method: string,
@@ -16,19 +21,30 @@ async function proxyRequest(
   try {
     const options: RequestInit = {
       method,
-      headers: {
-        ...headers,
-      },
+      headers: { ...headers },
     };
 
+    // BODY HANDLING
     if (body && method !== "GET" && method !== "HEAD") {
       if (body instanceof URLSearchParams) {
+        // Handle x-www-form-urlencoded (e.g., Login)
         options.headers = {
           "Content-Type": "application/x-www-form-urlencoded",
           ...headers,
         };
         options.body = body.toString();
+      } else if (body instanceof FormData) {
+        // Handle multipart/form-data (e.g., Deposits)
+        // Note: When using 'form-data' lib, let it set the boundary header automatically
+        // We merge other headers but EXCLUDE Content-Type to allow boundary generation
+        const formHeaders = body.getHeaders();
+        options.headers = {
+          ...headers,
+          ...formHeaders,
+        };
+        options.body = body as any; // Cast to any to satisfy fetch types compatible with Node streams
       } else {
+        // Default to JSON
         options.headers = {
           "Content-Type": "application/json",
           ...headers,
@@ -39,7 +55,7 @@ async function proxyRequest(
 
     const response = await fetch(`${API_BASE_URL}${url}`, options);
     const contentType = response.headers.get("content-type");
-    
+
     let data;
     if (contentType && contentType.includes("application/json")) {
       data = await response.json();
@@ -47,29 +63,47 @@ async function proxyRequest(
       data = await response.text();
     }
 
+    // Pass through failure details from backend even if status is 4xx/5xx
     return {
       status: response.status,
       ok: response.ok,
       data,
     };
   } catch (error: any) {
-    console.error("Proxy request error:", error);
+    console.error(`[Proxy Error] ${method} ${url}:`, error);
     throw error;
   }
 }
 
-export async function registerRoutes(app: Express): Promise<Express> {
-  
-  // --- AUTH ROUTES ---
+/**
+ * Helper to correctly serialize query params, especially arrays for FastAPI
+ * e.g., converts { a: [1, 2] } to "a=1&a=2" instead of "a=1,2"
+ */
+function buildQueryString(query: any): string {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => params.append(key, String(item)));
+    } else if (value !== undefined && value !== null) {
+      params.append(key, String(value));
+    }
+  });
+  const str = params.toString();
+  return str ? `?${str}` : "";
+}
 
-  app.post("/auth/token", async (req, res) => {
+export async function registerRoutes(app: Express): Promise<Express> {
+
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  // AUTH ROUTES
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+
+  // POST /auth/token (Login)
+  // Backend expects: application/x-www-form-urlencoded
+  app.post("/auth/token", async (req: Request, res: Response) => {
     try {
-      const { email, password, adminId } = req.body as { 
-        email?: string; 
-        password?: string; 
-        adminId?: string 
-      }; 
-      
+      const { email, password, adminId } = req.body;
+
       if (!email || !password) {
         return res.status(400).json({ detail: "Missing email or password" });
       }
@@ -77,12 +111,17 @@ export async function registerRoutes(app: Express): Promise<Express> {
       const formData = new URLSearchParams();
       formData.append("email", email);
       formData.append("password", password);
+      // Optional fields from docs: scope, client_id, client_secret
+      if (req.body.scope) formData.append("scope", req.body.scope);
+      if (req.body.client_id) formData.append("client_id", req.body.client_id);
 
       const result = await proxyRequest("/auth/token", "POST", formData);
 
       if (result.ok) {
         const responseData: any = { ...result.data };
-        if (adminId && adminId === ADMIN_ID) {
+        
+        // Use backend role if available, fallback to adminId check
+        if (responseData.user_role === "admin" || (adminId && adminId === ADMIN_ID)) {
           responseData.isAdmin = true;
         } else {
           responseData.isAdmin = false;
@@ -92,50 +131,41 @@ export async function registerRoutes(app: Express): Promise<Express> {
         res.status(result.status).json(result.data);
       }
     } catch (error: any) {
-      console.error("Login route error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.post("/auth/verify-admin-id", (req, res) => {
-    const { adminId } = req.body as { adminId?: string };
-    if (adminId && adminId === ADMIN_ID) {
-      res.json({ isAdmin: true });
-    } else {
-      res.json({ isAdmin: false });
-    }
-  });
-
+  // POST /auth/create-user
   app.post("/auth/create-user", async (req, res) => {
     try {
       const result = await proxyRequest("/auth/create-user", "POST", req.body);
       res.status(result.status).json(result.data);
     } catch (error: any) {
-      console.error("Register route error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
+  // POST /auth/otp-resend
   app.post("/auth/otp-resend", async (req, res) => {
     try {
       const result = await proxyRequest("/auth/otp-resend", "POST", req.body);
       res.status(result.status).json(result.data);
     } catch (error: any) {
-      console.error("Send OTP route error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
+  // POST /auth/reset-password
   app.post("/auth/reset-password", async (req, res) => {
     try {
       const result = await proxyRequest("/auth/reset-password", "POST", req.body);
       res.status(result.status).json(result.data);
     } catch (error: any) {
-      console.error("Reset Password route error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
+  // GET /auth/user-info
   app.get("/auth/user-info", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -148,35 +178,39 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
-  // --- DASHBOARD ROUTES ---
-
-  app.get("/dash/stats", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const url = queryString ? `/dash/stats?${queryString}` : "/dash/stats";
-      const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+  // Helper for admin verification (Client logic)
+  app.post("/auth/verify-admin-id", (req, res) => {
+    const { adminId } = req.body;
+    if (adminId && adminId === ADMIN_ID) {
+      res.json({ isAdmin: true });
+    } else {
+      res.json({ isAdmin: false });
     }
   });
 
+
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  // DASHBOARD ROUTES
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+
+  // POST /dash/transfer
   app.post("/dash/transfer", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/dash/transfer", "POST", req.body, { Authorization: authHeader || "" });
+      const result = await proxyRequest("/dash/transfer", "POST", req.body, { 
+        Authorization: authHeader || "" 
+      });
       res.status(result.status).json(result.data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
+  // GET /dash/notification
   app.get("/dash/notification", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const url = queryString ? `/dash/notification?${queryString}` : "/dash/notification";
+      const url = `/dash/notification${buildQueryString(req.query)}`;
       const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
       res.status(result.status).json(result.data);
     } catch (error: any) {
@@ -184,11 +218,12 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
+  // GET /dash/recent-trades
+  // Query: status (PENDING, COMPLETED, ACTIVE)
   app.get("/dash/recent-trades", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const url = queryString ? `/dash/recent-trades?${queryString}` : "/dash/recent-trades";
+      const url = `/dash/recent-trades${buildQueryString(req.query)}`;
       const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
       res.status(result.status).json(result.data);
     } catch (error: any) {
@@ -196,6 +231,7 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
+  // GET /dash/deposits
   app.get("/dash/deposits", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -206,16 +242,37 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
-  app.post("/dash/deposits", async (req, res) => {
+  // POST /dash/deposits (Multipart/Form-Data)
+  // Uses 'multer' to intercept the file, then reconstructs FormData for the backend
+  app.post("/dash/deposits", upload.single("receipt"), async (req: any, res: Response) => {
     try {
       const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/dash/deposits", "POST", req.body, { Authorization: authHeader || "" });
+
+      if (!req.file) {
+        return res.status(400).json({ detail: "Receipt file is required" });
+      }
+
+      // Reconstruct FormData for the external API
+      const form = new FormData();
+      form.append("currency", req.body.currency);
+      form.append("amount", req.body.amount);
+      form.append("receipt", req.file.buffer, {
+        filename: req.file.originalname,
+        contentType: req.file.mimetype,
+      });
+
+      const result = await proxyRequest("/dash/deposits", "POST", form, { 
+        Authorization: authHeader || "" 
+      });
+      
       res.status(result.status).json(result.data);
     } catch (error: any) {
+      console.error("Deposit Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
+  // GET /dash/withdrawals
   app.get("/dash/withdrawals", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -226,6 +283,7 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
+  // POST /dash/withdrawals
   app.post("/dash/withdrawals", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -236,18 +294,30 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
+  // GET /dash/transactions/:tx_type/:tx_id
   app.get("/dash/transactions/:tx_type/:tx_id", async (req, res) => {
     try {
       const { tx_type, tx_id } = req.params;
       const authHeader = req.headers.authorization;
-      const result = await proxyRequest(`/dash/transactions/${tx_type}/${tx_id}`, "GET", undefined, { Authorization: authHeader || "" });
+      
+      // Validation to match Enum in docs
+      if (!['deposit', 'withdraw'].includes(tx_type)) {
+         return res.status(400).json({ detail: "Invalid transaction type" });
+      }
+
+      const result = await proxyRequest(`/dash/transactions/${tx_type}/${tx_id}`, "GET", undefined, { 
+        Authorization: authHeader || "" 
+      });
       res.status(result.status).json(result.data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // --- ARBITRAGE ROUTES ---
+
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  // ARBITRAGE ROUTES
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 
   app.get("/arb/arbitrage-exc", async (req, res) => {
     try {
@@ -267,10 +337,12 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
+  // GET /arb/opportunity-scanner
+  // Query: exchanges (array), symbols (array), min_profit
   app.get("/arb/opportunity-scanner", async (req, res) => {
     try {
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const url = queryString ? `/arb/opportunity-scanner?${queryString}` : "/arb/opportunity-scanner";
+      // Use helper to ensure arrays are formatted correctly (e.g. ?exchanges=A&exchanges=B)
+      const url = `/arb/opportunity-scanner${buildQueryString(req.query)}`;
       const result = await proxyRequest(url, "GET");
       res.status(result.status).json(result.data);
     } catch (error: any) {
@@ -302,14 +374,15 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
-  // --- ADMIN ROUTES (Fixed & Verified) ---
 
-  // 1. Dashboard: Passes 'page' and 'suspended' query params
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  // ADMIN ROUTES
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+
   app.get("/admini/dashboard", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const url = queryString ? `/admini/dashboard?${queryString}` : "/admini/dashboard";
+      const url = `/admini/dashboard${buildQueryString(req.query)}`;
       const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
       res.status(result.status).json(result.data);
     } catch (error: any) {
@@ -317,12 +390,10 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
-  // 2. View User: Passes 'user_id' query param
   app.get("/admini/view-user", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const url = `/admini/view-user?${queryString}`;
+      const url = `/admini/view-user${buildQueryString(req.query)}`;
       const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
       res.status(result.status).json(result.data);
     } catch (error: any) {
@@ -330,15 +401,13 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
-  // 3. Edit User: Passes 'user_id' in query param, body data in request body
   app.patch("/admini/edit-user", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
-      // Extract user_id from query params to append to URL
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const url = `/admini/edit-user?${queryString}`;
+      // Extract user_id for the query string, keep body for the payload
+      const queryParams = { user_id: req.query.user_id };
+      const url = `/admini/edit-user${buildQueryString(queryParams)}`;
       
-      // Forward the body (name, etc.) and the Authorization header
       const result = await proxyRequest(url, "PATCH", req.body, { Authorization: authHeader || "" });
       res.status(result.status).json(result.data);
     } catch (error: any) {
@@ -346,12 +415,10 @@ export async function registerRoutes(app: Express): Promise<Express> {
     }
   });
 
-  // 4. Suspend User: Passes 'user_id' and 'action' query params
   app.get("/admini/suspend-user", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const url = `/admini/suspend-user?${queryString}`;
+      const url = `/admini/suspend-user${buildQueryString(req.query)}`;
       const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
       res.status(result.status).json(result.data);
     } catch (error: any) {

@@ -16,10 +16,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-export default function Login() {
+export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
+  const [adminId, setAdminId] = useState("");
   const { toast } = useToast();
+
+  // CHANGE THIS TO YOUR REAL SECRET ADMIN ID (keep it secret!)
+  const CORRECT_ADMIN_ID = "gatadmin2025"; // ← change this!
 
   const {
     register,
@@ -30,23 +34,43 @@ export default function Login() {
   });
 
   const onSubmit = async (data: LoginInput) => {
+    if (!adminId.trim()) {
+      toast({
+        title: "Error",
+        description: "Admin ID is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (adminId.trim() !== CORRECT_ADMIN_ID) {
+      toast({
+        title: "Error",
+        description: "Invalid Admin ID",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const formData = new URLSearchParams();
       formData.append("email", data.email);
       formData.append("password", data.password);
+      formData.append("adminId", adminId.trim());
 
       const response = await apiRequest("POST", "/auth/token", formData.toString());
 
       if (response.access_token) {
         sessionStorage.setItem("token", response.access_token);
+        sessionStorage.setItem("isAdmin", "true");
 
         toast({
           title: "Success",
           description: "Logged in successfully!",
         });
 
-        setLocation("/dashboard");
+        setLocation("/admin");
       }
     } catch (error: any) {
       toast({
@@ -73,10 +97,10 @@ export default function Login() {
             </div>
           </div>
           <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">
-            Welcome Back
+            Admin Login
           </CardTitle>
           <CardDescription className="text-center text-gray-400">
-            Sign in to access your TradePro dashboard
+            Sign in to access the admin dashboard
           </CardDescription>
         </CardHeader>
 
@@ -91,7 +115,7 @@ export default function Login() {
                 id="email"
                 data-testid="input-email"
                 type="email"
-                placeholder="trader@example.com"
+                placeholder="admin@example.com"
                 className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
                 {...register("email")}
               />
@@ -123,6 +147,24 @@ export default function Login() {
               )}
             </div>
 
+            {/* Admin ID Field */}
+            <div className="space-y-2">
+              <Label htmlFor="adminId" className="text-gray-300 text-sm font-medium ml-1">
+                Admin ID
+              </Label>
+              <Input
+                id="adminId"
+                type="text"
+                placeholder="Enter admin ID"
+                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
+                value={adminId}
+                onChange={(e) => setAdminId(e.target.value)}
+              />
+              <p className="text-xs text-gray-500 ml-1">
+                Required for admin dashboard access
+              </p>
+            </div>
+
             <Button
               type="submit"
               data-testid="button-submit"
@@ -138,13 +180,13 @@ export default function Login() {
             </Button>
 
             <div className="pt-2 text-center text-sm text-gray-400">
-              Don't have an account?{" "}
+              Not an admin?{" "}
               <Link
-                href="/register"
-                data-testid="link-register"
+                href="/login"
+                data-testid="link-login"
                 className="text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4"
               >
-                Create Account
+                Sign in as user
               </Link>
             </div>
           </form>

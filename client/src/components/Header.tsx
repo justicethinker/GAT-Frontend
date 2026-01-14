@@ -69,14 +69,7 @@ export function Header() {
     window.location.href = "/login";
   };
 
-  // Helper to trigger the global admin gate from App.tsx
-  const handleAdminClick = () => {
-    // @ts-ignore - window.goToAdmin is defined in App.tsx
-    if (window.goToAdmin) {
-      // @ts-ignore
-      window.goToAdmin();
-    }
-  };
+
 
   const navLinks = [
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -134,18 +127,7 @@ export function Header() {
           {/* RIGHT: Notifications, Admin & User Menu */}
           <div className="flex items-center space-x-3">
             
-            {/* --- NEW ADMIN BUTTON (Desktop) --- */}
-            {/* Changed from Link to Button with onClick */}
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleAdminClick}
-              className="hidden md:flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800"
-            >
-              <Shield className="w-4 h-4" />
-              <span>Admin</span>
-            </Button>
-            {/* ---------------------------------- */}
+        
 
             {/* Notifications Dropdown */}
             <div className="relative" ref={notifMenuRef}>
@@ -256,20 +238,7 @@ export function Header() {
              </div>
              <div className="grid grid-cols-2 gap-2">
                 
-                {/* --- NEW ADMIN BUTTON (Mobile) --- */}
-                {/* Changed from Link to Button with onClick */}
-                <Button 
-                    variant="outline" 
-                    className="col-span-2 w-full border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2"
-                    onClick={() => {
-                        handleAdminClick();
-                        setMobileMenuOpen(false);
-                    }}
-                >
-                    <Shield className="w-4 h-4" /> Admin Dashboard
-                </Button>
-                {/* --------------------------------- */}
-                
+              
                 <Link href="/profile">
                     <Button variant="outline" className="w-full border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800">
                         Profile

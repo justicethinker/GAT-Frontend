@@ -400,6 +400,7 @@ function LandingPage() {
              <Link href="/terms" className="hover:text-emerald-400 transition-colors">Terms</Link>
              <Link href="/privacy" className="hover:text-emerald-400 transition-colors">Privacy</Link>
              <Link href="/support" className="hover:text-emerald-400 transition-colors">Support</Link>
+             <Link href="/admin-login" className="hover:text-emerald-400 transition-colors">Admin</Link>
           </div>
           <div>
             &copy; {new Date().getFullYear()} Godslove Automated Trading.
