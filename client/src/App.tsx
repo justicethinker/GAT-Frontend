@@ -27,12 +27,37 @@ const Profile = lazy(() => import("@/pages/Profile"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const AdminLogin = lazy(() => import("@/pages/AdminLogin"));
 
+// ──────────────────────────────────────────────────────────────
+// UTILS
+// ──────────────────────────────────────────────────────────────
+
 // Centralized logout
 const clearAuth = () => {
   sessionStorage.clear(); 
   localStorage.removeItem("token"); 
   localStorage.removeItem("isAdmin"); 
   queryClient.clear();
+};
+
+// CRITICAL FIX: Explicit Fetcher to ensure Token is sent
+const authenticatedFetcher = async <T,>(context: { queryKey: readonly unknown[] }): Promise<T> => {
+  const [path] = context.queryKey as string[];
+  const token = sessionStorage.getItem("token");
+  
+  if (!token) throw new Error("No token found");
+
+  const res = await fetch(path, {
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}` 
+    }
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.detail || "Request failed");
+  }
+  return res.json() as T;
 };
 
 /**
@@ -67,7 +92,7 @@ function useIdleTimer() {
     const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
     const handleActivity = () => resetTimer();
     events.forEach((event) => window.addEventListener(event, handleActivity));
-    resetTimer(); // Initial start
+    resetTimer(); 
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -101,31 +126,27 @@ const FullScreenLoader = ({ label = "Loading GAT System..." }: { label?: string 
 // ──────────────────────────────────────────────────────────────
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const [, setLocation] = useLocation(); // Hook #1
   const token = sessionStorage.getItem("token");
 
-  // Hook #2 (Moved BEFORE the 'if (!token)' check)
+  // Hook 1: Query (Now uses authenticatedFetcher)
   const { isLoading, isError } = useQuery({
     queryKey: ["/auth/user-info"],
+    queryFn: authenticatedFetcher, // <--- CRITICAL FIX
     retry: false,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    enabled: !!token, // Only run if token exists
+    staleTime: 1000 * 60 * 5, 
+    enabled: !!token, 
   });
 
-  // Now we can safely do conditional returns
-  if (!token) {
-    if (localStorage.getItem("token")) clearAuth();
-    return <Redirect to="/login" />;
-  }
+  // Hook 2: Effect
+  useEffect(() => {
+    if (isError || (!token && localStorage.getItem("token"))) {
+      clearAuth();
+    }
+  }, [isError, token]);
 
-  if (isError) {
-    clearAuth();
-    return <Redirect to="/login" />;
-  }
-
-  if (isLoading) {
-    return <FullScreenLoader />;
-  }
+  if (!token) return <Redirect to="/login" />;
+  if (isError) return <Redirect to="/login" />;
+  if (isLoading) return <FullScreenLoader />;
 
   return <>{children}</>;
 }
@@ -134,23 +155,30 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
   const token = sessionStorage.getItem("token");
   const isAdminStored = sessionStorage.getItem("isAdmin") === "true";
 
-  // Hook #1 (Moved BEFORE logic)
+  // Hook 1: Query (Now uses authenticatedFetcher)
   const { isLoading, isError, data } = useQuery<UserInfo>({
     queryKey: ["/auth/user-info"],
+    queryFn: authenticatedFetcher, // <--- CRITICAL FIX
     retry: false,
-    enabled: !!token, // Only run if token exists
+    enabled: !!token,
   });
 
-  // Now we can do conditional returns
+  // Debugging Logs (Check browser console if it still fails)
+  useEffect(() => {
+    if (isError) console.error("Admin Check Failed: API Error");
+  }, [isError]);
+
+  // Fast Client-Side Check
   if (!token || !isAdminStored) {
     return <Redirect to="/admin-login" />;
   }
 
+  // Waiting for server...
   if (isLoading) return <FullScreenLoader label="Verifying Admin Access..." />;
 
-  // Strict Server Verification
-  if (isError || !data?.isAdmin) {
-    if (isError) clearAuth();
+  // Server Side Verification
+  if (isError) {
+    clearAuth(); // Only clear auth if it's a real error (like expired token)
     return <Redirect to="/admin-login" />;
   }
 
@@ -161,6 +189,10 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
   const token = sessionStorage.getItem("token");
   return token ? <Redirect to="/dashboard" /> : <>{children}</>;
 }
+
+// ──────────────────────────────────────────────────────────────
+// ROUTING
+// ──────────────────────────────────────────────────────────────
 
 function Router() {
   return (
@@ -181,6 +213,7 @@ function Router() {
           <PublicOnly><ResetPassword /></PublicOnly>
         </Route>
 
+        {/* Note: Admin Login is NOT wrapped in PublicOnly so you can re-login if session expires */}
         <Route path="/admin-login" component={AdminLogin} />
 
         {/* PROTECTED ROUTES */}
@@ -218,7 +251,6 @@ function Router() {
 }
 
 function App() {
-  // Activate Global Idle Timer
   useIdleTimer();
 
   return (

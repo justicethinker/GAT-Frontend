@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { 
   Play, Square, Filter, ArrowRightLeft, 
-  History, Loader2, CheckCircle2
+  History, Loader2, CheckCircle2, UploadCloud, FileText
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +57,9 @@ const WalletSchema = z.object({
   from: z.enum(["forex", "arb", "fut"]).optional(),
   to: z.enum(["forex", "arb", "fut"]).optional(),
   address: z.string().optional(),
+}).refine((data) => !data.from || !data.to || data.from !== data.to, {
+  message: "Source and destination cannot be the same",
+  path: ["to"],
 });
 
 type TradeFormValues = z.infer<typeof TradeSchema>;
@@ -66,8 +69,8 @@ type WalletFormValues = z.infer<typeof WalletSchema>;
 // 2. UTILITY: ROBUST FETCHER
 // ──────────────────────────────────────────────────────────────
 
-const authenticatedFetcher = async ({ queryKey }: { queryKey: any[] }) => {
-  const [path, params] = queryKey;
+const authenticatedFetcher = async (context: { queryKey: readonly unknown[] }) => {
+  const [path, params] = context.queryKey as [string, any?];
   const url = new URL(`${window.location.origin}${path}`);
   const token = sessionStorage.getItem("token");
 
@@ -162,7 +165,7 @@ export default function Arbitrage() {
     queryFn: authenticatedFetcher,
   });
   const { data: exchangeList = [] } = useQuery({ queryKey: ["/arb/arbitrage-exc"], queryFn: authenticatedFetcher, staleTime: Infinity });
-  const { data: symbolList = [] } = useQuery({ queryKey: ["/arb/arbitrage-symbol"], queryFn: authenticatedFetcher, staleTime: Infinity });
+  const { data: symbolList = [], isLoading: symbolsLoading } = useQuery({ queryKey: ["/arb/arbitrage-symbol"], queryFn: authenticatedFetcher, staleTime: Infinity });
   const { data: recentTrades = [] } = useQuery({ queryKey: ["/dash/recent-trades"], queryFn: authenticatedFetcher });
   const { data: userArbTrades = [] } = useQuery({ queryKey: ["/arb/user-arb"], queryFn: authenticatedFetcher });
 
@@ -170,13 +173,17 @@ export default function Arbitrage() {
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
   
-  // New State for Quick Trade Modal input
+  // State for Inputs
   const [quickAmount, setQuickAmount] = useState(""); 
+  const [receipt, setReceipt] = useState<File | null>(null); // State for Deposit Receipt
 
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [walletAction, setWalletAction] = useState<"deposit" | "withdraw" | "transfer">("deposit");
 
-  const walletForm = useForm<WalletFormValues>({ resolver: zodResolver(WalletSchema) });
+  const walletForm = useForm<WalletFormValues>({ 
+    resolver: zodResolver(WalletSchema),
+    defaultValues: { from: "forex", to: "arb" }
+  });
   const manualTradeForm = useForm<TradeFormValues>({ resolver: zodResolver(TradeSchema) });
 
   // --- Mutations ---
@@ -210,11 +217,14 @@ export default function Arbitrage() {
       let body: any;
 
       if (walletAction === 'deposit') {
+        if (!receipt) throw new Error("Receipt is required for deposits.");
+        
         const formData = new FormData();
         formData.append("amount", String(data.amount));
         formData.append("currency", data.currency || "USDT");
+        formData.append("receipt", receipt); // Attach Receipt
         body = formData; 
-        delete headers["Content-Type"];
+        delete headers["Content-Type"]; // Browser sets boundary automatically
       } else {
         headers["Content-Type"] = "application/json";
         body = JSON.stringify(walletAction === 'transfer' 
@@ -231,6 +241,7 @@ export default function Arbitrage() {
       toast({ title: "Success", description: `${walletAction} submitted successfully.` });
       setWalletModalOpen(false);
       walletForm.reset();
+      setReceipt(null); // Reset receipt
       queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] });
     },
     onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
@@ -238,7 +249,7 @@ export default function Arbitrage() {
 
   const handleQuickTrade = (opp: Opportunity) => {
     setSelectedOpp(opp);
-    setQuickAmount(""); // Reset on open
+    setQuickAmount(""); 
     setTradeModalOpen(true);
   };
 
@@ -433,7 +444,17 @@ export default function Arbitrage() {
                           <div className="grid grid-cols-2 gap-4">
                              <div className="space-y-2">
                                 <Label>Symbol</Label>
-                                <Input {...manualTradeForm.register("symbol")} placeholder="e.g. BTCUSDT" className="bg-gray-800 border-gray-700"/>
+                                <Select onValueChange={(v) => manualTradeForm.setValue("symbol", v)} disabled={symbolsLoading}>
+                                   <SelectTrigger className="bg-gray-800 border-gray-700">
+                                     <SelectValue placeholder={symbolsLoading ? "Loading symbols..." : "Select Symbol"} />
+                                   </SelectTrigger>
+                                   <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                                     {symbolList.map((s: any, i: number) => {
+                                       const symbol = typeof s === 'object' ? s.name || s.symbol || s : s;
+                                       return <SelectItem key={i} value={symbol}>{symbol}</SelectItem>;
+                                     })}
+                                   </SelectContent>
+                                </Select>
                                 {manualTradeForm.formState.errors.symbol && <p className="text-red-500 text-xs">{manualTradeForm.formState.errors.symbol.message}</p>}
                              </div>
                              <div className="space-y-2">
@@ -545,7 +566,7 @@ export default function Arbitrage() {
                   <div className="grid grid-cols-2 gap-4">
                      <div className="space-y-1">
                         <Label>From</Label>
-                        <Select onValueChange={v => walletForm.setValue("from", v as any)} defaultValue="forex">
+                        <Select onValueChange={(v: any) => walletForm.setValue("from", v)} defaultValue={walletForm.watch("from")}>
                            <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
                            <SelectContent className="bg-gray-800 border-gray-700 text-white">
                               <SelectItem value="forex">Forex</SelectItem><SelectItem value="arb">Arb</SelectItem><SelectItem value="fut">Futures</SelectItem>
@@ -554,7 +575,7 @@ export default function Arbitrage() {
                      </div>
                      <div className="space-y-1">
                         <Label>To</Label>
-                        <Select onValueChange={v => walletForm.setValue("to", v as any)} defaultValue="arb">
+                        <Select onValueChange={(v: any) => walletForm.setValue("to", v)} defaultValue={walletForm.watch("to")}>
                            <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
                            <SelectContent className="bg-gray-800 border-gray-700 text-white">
                               <SelectItem value="forex">Forex</SelectItem><SelectItem value="arb">Arb</SelectItem><SelectItem value="fut">Futures</SelectItem>
@@ -563,6 +584,7 @@ export default function Arbitrage() {
                      </div>
                   </div>
                )}
+               {walletAction === 'transfer' && walletForm.formState.errors.to && <p className="text-red-500 text-xs">{walletForm.formState.errors.to.message}</p>}
                
                {walletAction === 'withdraw' && (
                   <div className="space-y-2">
@@ -573,13 +595,21 @@ export default function Arbitrage() {
 
                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                     <Label>Amount</Label>
-                     <Input 
-                       type="text" 
-                       inputMode="decimal" 
-                       {...walletForm.register("amount")} 
-                       className="bg-gray-800 border-gray-700" 
-                     />
+                     <Label>
+                        Amount 
+                        {walletAction === 'transfer' && <span className="text-emerald-400 text-xs ml-1">(USDT)</span>}
+                     </Label>
+                     <div className="relative">
+                        <Input 
+                          type="text" 
+                          inputMode="decimal" 
+                          {...walletForm.register("amount")} 
+                          className="bg-gray-800 border-gray-700 pr-12" 
+                        />
+                        {walletAction === 'transfer' && (
+                           <span className="absolute right-3 top-2.5 text-xs text-gray-500 font-bold">USDT</span>
+                        )}
+                     </div>
                      {walletForm.formState.errors.amount && <p className="text-red-500 text-xs">{walletForm.formState.errors.amount.message}</p>}
                   </div>
                   {(walletAction === 'deposit' || walletAction === 'withdraw') && (
@@ -594,6 +624,21 @@ export default function Arbitrage() {
                      </div>
                   )}
                </div>
+
+               {walletAction === 'deposit' && (
+                  <div className="space-y-2">
+                     <Label>Deposit Receipt</Label>
+                     <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-700 border-dashed rounded-lg cursor-pointer bg-gray-800 hover:bg-gray-700 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                           <UploadCloud className="w-8 h-8 mb-2 text-gray-400" />
+                           <p className="text-sm text-gray-400">
+                              {receipt ? <span className="text-emerald-400 font-bold flex items-center gap-1"><FileText className="w-4 h-4"/> {receipt.name}</span> : "Click to upload proof of payment"}
+                           </p>
+                        </div>
+                        <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => setReceipt(e.target.files?.[0] || null)} />
+                     </label>
+                  </div>
+               )}
 
                <Button disabled={walletMutation.isPending} className="w-full bg-emerald-600 hover:bg-emerald-500 capitalize">
                   {walletMutation.isPending ? "Processing..." : `Confirm ${walletAction}`}

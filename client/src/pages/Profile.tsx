@@ -21,16 +21,13 @@ interface UserProfile {
   location: string;
   website: string;
   avatar: string;
-}
-
-interface TradingStats {
-  totalBalance: string;
-  todayPnL: string;
-  todayPnLPercent: string;
-  activeTrades: number;
-  newTrades: number;
-  winRate: string;
-  winRateValue: number;
+  // Trading stats from backend
+  balance_arb?: number;
+  balance_forex?: number;
+  balance_fut?: number;
+  total_pl?: number;
+  win_rate?: number;
+  active_trades?: number;
 }
 
 // --- SCHEMA ---
@@ -44,14 +41,14 @@ const profileSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 // --- FETCHERS ---
-const authenticatedFetcher = async ({ queryKey }: { queryKey: string[] }) => {
-  const [path] = queryKey;
+const authenticatedFetcher = async <T,>(context: { queryKey: readonly unknown[] }): Promise<T> => {
+  const [path] = context.queryKey as string[];
   const token = sessionStorage.getItem("token");
   const res = await fetch(path, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   });
   if (!res.ok) throw new Error("Failed to fetch data");
-  return res.json();
+  return res.json() as T;
 };
 
 // --- COMPONENTS ---
@@ -93,27 +90,21 @@ export default function Profile() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
-  // 1. Data Fetching
   const { data: user, isLoading: isUserLoading } = useQuery<UserProfile>({
     queryKey: ['/auth/user-info'],
     queryFn: authenticatedFetcher,
   });
 
-  const { data: stats, isLoading: isStatsLoading } = useQuery<TradingStats>({
-    queryKey: ['/dash/stats'], // Assuming you create this endpoint or mock it
-    queryFn: async () => {
-        // Mock stats for now until backend is ready
-        return {
-            totalBalance: "$12,450.00",
-            todayPnL: "+$320.00",
-            todayPnLPercent: "2.4%",
-            activeTrades: 5,
-            newTrades: 2,
-            winRate: "68%",
-            winRateValue: 68
-        };
-    },
-  });
+  // Calculate stats from user data
+  const stats = user ? {
+    totalBalance: `$${((user.balance_arb || 0) + (user.balance_forex || 0) + (user.balance_fut || 0)).toLocaleString()}`,
+    todayPnL: user.total_pl ? (user.total_pl >= 0 ? `+$${user.total_pl.toFixed(2)}` : `-$${Math.abs(user.total_pl).toFixed(2)}`) : '$0.00',
+    todayPnLPercent: '0%', // This might need to be calculated differently
+    activeTrades: user.active_trades || 0,
+    newTrades: 0, // This might not be available
+    winRate: user.win_rate ? `${(user.win_rate * 100).toFixed(0)}%` : '0%',
+    winRateValue: user.win_rate ? user.win_rate * 100 : 0
+  } : null;
 
   // 2. Form Setup
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ProfileFormValues>({
@@ -193,7 +184,7 @@ export default function Profile() {
     reset();
   };
 
-  if (isUserLoading || isStatsLoading) return <div className="min-h-screen bg-slate-950"><Header /><ProfileSkeleton /></div>;
+  if (isUserLoading) return <div className="min-h-screen bg-slate-950"><Header /><ProfileSkeleton /></div>;
   if (!user) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400">Error loading profile.</div>;
 
   const displayStats = stats || {

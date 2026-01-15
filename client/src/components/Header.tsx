@@ -27,15 +27,15 @@ interface Notification {
   read?: boolean;
 }
 
-const authenticatedFetcher = async ({ queryKey }: { queryKey: string[] }) => {
-  const [path] = queryKey;
+const authenticatedFetcher = async <T,>(context: { queryKey: readonly unknown[] }): Promise<T> => {
+  const [path] = context.queryKey as string[];
   const token = sessionStorage.getItem("token");
   // Use relative path directly
   const res = await fetch(path, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   });
   if (!res.ok) throw new Error("Failed to fetch");
-  return res.json();
+  return res.json() as T;
 };
 
 // ──────────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ export function Header() {
     sessionStorage.clear();
     localStorage.clear();
     queryClient.clear();
-    window.location.href = "/login";
+    window.location.href = "/";
   };
 
   const getInitials = (email?: string) => {

@@ -184,7 +184,12 @@ const ActionGrid = ({ walletAddress }: { walletAddress: string }) => {
           </div>
         </DialogTrigger>
         <DialogContent className="bg-slate-900 border-slate-800 text-white">
-          <DialogHeader><DialogTitle>Internal Transfer</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Internal Transfer</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Move funds instantly between your trading accounts.
+            </DialogDescription>
+          </DialogHeader>
           <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4 pt-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -215,7 +220,7 @@ const ActionGrid = ({ walletAddress }: { walletAddress: string }) => {
                   type="text" 
                   inputMode="decimal"
                   {...register("amount")} 
-                  className="bg-slate-950 border-slate-800 pl-8" 
+                  className="bg-slate-950 border-slate-800 pl-8 text-white" 
                   placeholder="0.00" 
                   autoComplete="off"
                 />
@@ -369,7 +374,7 @@ const TransactionManager = () => {
                     const val = e.target.value;
                     if (val === '' || /^\d*\.?\d*$/.test(val)) setDepositAmount(val);
                   }} 
-                  className="bg-slate-950 border-slate-800" 
+                  className="bg-slate-950 border-slate-800 text-white" 
                   placeholder="0.00" 
                 />
               </div>
@@ -411,7 +416,7 @@ const TransactionManager = () => {
              </div>
              <div className="space-y-2">
                 <Label>Wallet Address</Label>
-                <Input {...withdrawForm.register("address")} className="bg-slate-950 border-slate-800" placeholder="0x..." />
+                <Input {...withdrawForm.register("address")} className="bg-slate-950 border-slate-800 text-white" placeholder="0x..." />
                 {withdrawForm.formState.errors.address && <p className="text-red-500 text-xs">{withdrawForm.formState.errors.address.message}</p>}
              </div>
              <div className="space-y-2">
@@ -420,7 +425,7 @@ const TransactionManager = () => {
                   type="text"
                   inputMode="decimal"
                   {...withdrawForm.register("amount")} 
-                  className="bg-slate-950 border-slate-800" 
+                  className="bg-slate-950 border-slate-800 text-white" 
                   placeholder="0.00" 
                 />
                 {withdrawForm.formState.errors.amount && <p className="text-red-500 text-xs">{withdrawForm.formState.errors.amount.message}</p>}
@@ -463,8 +468,8 @@ export default function Wallet() {
 
   // Merge & Sort History
   const history = useMemo(() => {
-    const d = Array.isArray(deposits) ? deposits.map(x => ({ ...x, type: 'Deposit' as const })) : [];
-    const w = Array.isArray(withdrawals) ? withdrawals.map(x => ({ ...x, type: 'Withdraw' as const })) : [];
+    const d = Array.isArray(deposits) ? deposits.map(x => ({ ...x, type: 'Deposit' })) : [];
+    const w = Array.isArray(withdrawals) ? withdrawals.map(x => ({ ...x, type: 'Withdraw' })) : [];
     return [...d, ...w].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [deposits, withdrawals]);
 
@@ -474,16 +479,16 @@ export default function Wallet() {
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
           
           <PortfolioHeader 
-            stats={stats as UserInfo} 
+            stats={stats} 
             isLoading={statsLoading} 
             onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] })} 
           />
           
-          <ActionGrid walletAddress={(stats as UserInfo)?.wallet_address || "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"} />
+          <ActionGrid walletAddress={stats?.wallet_address || "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"} />
           
           <div className="space-y-2">
             <h3 className="text-xl font-bold px-1">Your Accounts</h3>
-            <AccountsGrid stats={stats as UserInfo} />
+            <AccountsGrid stats={stats} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

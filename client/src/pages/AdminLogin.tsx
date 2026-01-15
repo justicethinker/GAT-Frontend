@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query"; // Import QueryClient
 import { loginSchema, type LoginInput } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { Eye, EyeOff, Loader2, ShieldAlert } from "lucide-react";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient(); // Initialize QueryClient
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [adminId, setAdminId] = useState("");
@@ -45,12 +47,10 @@ export default function AdminLogin() {
     setIsLoading(true);
 
     try {
-      // 2. Prepare Payload (x-www-form-urlencoded)
+      // 2. Prepare Payload
       const formData = new URLSearchParams();
       formData.append("email", data.email);
       formData.append("password", data.password);
-      // SECURITY NOTE: We send the Admin ID to the server for validation.
-      // Never validate secrets on the client side.
       formData.append("adminId", adminId.trim());
 
       // 3. Authenticate
@@ -73,8 +73,13 @@ export default function AdminLogin() {
           throw new Error("This account does not have administrator privileges.");
         }
 
+        // Store credentials
         sessionStorage.setItem("token", responseData.access_token);
         sessionStorage.setItem("isAdmin", "true");
+
+        // CRITICAL FIX: Invalidate queries so the 'RequireAdmin' guard 
+        // in App.tsx re-fetches the user status immediately.
+        await queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] });
 
         toast({
           title: "Admin Access Granted",
@@ -82,8 +87,8 @@ export default function AdminLogin() {
           className: "bg-emerald-600 text-white border-emerald-700",
         });
 
-        // Small delay to ensure storage persistence
-        setTimeout(() => setLocation("/admin"), 100);
+        // Navigate immediately (awaiting invalidation above ensures data is fresh)
+        setLocation("/admin");
       }
     } catch (error: any) {
       console.error("Admin Login Error:", error);
@@ -176,7 +181,7 @@ export default function AdminLogin() {
               </Label>
               <Input
                 id="adminId"
-                type="password" // Masked for security in public spaces
+                type="password"
                 autoComplete="off"
                 placeholder="Enter security key"
                 className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-red-500 focus:ring-red-500/20 transition-all font-mono tracking-wider"

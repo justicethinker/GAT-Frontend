@@ -74,7 +74,7 @@ export default function Settings() {
       localStorage.removeItem('isAdmin');
       
       // 3. Hard Redirect to clear memory/React state
-      window.location.href = '/login';
+      window.location.href = '/';
     } catch (error) {
       console.error("Logout failed", error);
     }
