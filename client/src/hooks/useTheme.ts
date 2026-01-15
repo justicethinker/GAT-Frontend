@@ -1,46 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
-type Theme = 'light' | 'dark' | 'system';
+type Theme = "dark" | "light" | "system";
 
 export function useTheme() {
-  // Initialize state lazily so we read from localStorage immediately on mount
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      return (sessionStorage.getItem('theme') as Theme) || 'dark';
+    // Check localStorage first
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("vite-ui-theme") as Theme;
+      if (stored) return stored;
     }
-    return 'dark';
+    // Default to system preference if nothing stored, or hardcode 'dark'
+    return "dark";
   });
 
   useEffect(() => {
-    const root = document.documentElement;
-    
-    // Remove existing classes to avoid conflicts
-    root.classList.remove('light', 'dark');
+    const root = window.document.documentElement;
 
-    if (theme === 'system') {
-      const systemMedia = window.matchMedia('(prefers-color-scheme: dark)');
-      
-      const applySystemTheme = () => {
-        const isDark = systemMedia.matches;
-        root.classList.remove('light', 'dark');
-        root.classList.add(isDark ? 'dark' : 'light');
-      };
+    // Remove old classes to prevent conflicts
+    root.classList.remove("light", "dark");
 
-      // Apply immediately
-      applySystemTheme();
+    if (theme === "system") {
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+        .matches
+        ? "dark"
+        : "light";
 
-      // Listen for OS changes in real-time
-      systemMedia.addEventListener('change', applySystemTheme);
-
-      return () => systemMedia.removeEventListener('change', applySystemTheme);
-    } else {
-      root.classList.add(theme);
+      root.classList.add(systemTheme);
+      return;
     }
 
-    sessionStorage.setItem('theme', theme);
+    // Apply specific theme
+    root.classList.add(theme);
   }, [theme]);
 
-  const setTheme = (newTheme: Theme) => setThemeState(newTheme);
+  const setTheme = (theme: Theme) => {
+    // Save to localStorage for persistence
+    localStorage.setItem("vite-ui-theme", theme);
+    setThemeState(theme);
+  };
 
   return { theme, setTheme };
 }

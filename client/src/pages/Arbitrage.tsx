@@ -1,596 +1,419 @@
-import { Layout } from "@/components/Layout";
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { 
+  Play, Square, Filter, ArrowRightLeft, 
+  History, Loader2, CheckCircle2
+} from "lucide-react";
+import { Layout } from "@/components/Layout";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/hooks/use-toast";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
-// --- CONFIGURATION ---
-const API_BASE = "https://gat-zm1r.onrender.com";
+// ──────────────────────────────────────────────────────────────
+// 1. CONFIGURATION & TYPES
+// ──────────────────────────────────────────────────────────────
 
-// --- TYPES ---
-// FIX: Updated to match your backend response image (unnamed.jpg) exactly
+const API_BASE = ""; 
+
 interface Opportunity {
   symbol: string;
   buy_exchange: string;
   sell_exchange: string;
-  buy_price: number;      // Fixed: matches backend
-  sell_price: number;     // Fixed: matches backend
-  profit_percent: number; // Fixed: matches backend
+  buy_price: number;
+  sell_price: number;
+  profit_percent: number;
 }
 
-interface TradeHistoryItem {
-  id: number;
-  symbol: string;
-  buy_exchange: string;
-  sell_exchange: string;
-  profit: string;
-  status: 'PENDING' | 'COMPLETED' | 'ACTIVE';
+interface UserInfo {
+  balance_forex: number;
+  balance_arb: number;
+  balance_fut: number;
+  total_pl: number;
+  active_trade: number;
 }
 
-// --- UTILITIES ---
+// Zod Schemas
+const TradeSchema = z.object({
+  symbol: z.string().min(1, "Symbol is required"),
+  buy_exchange: z.string().min(1, "Buy Exchange required"),
+  sell_exchange: z.string().min(1, "Sell Exchange required"),
+  qty: z.coerce.number().positive("Quantity must be > 0"),
+});
 
-const defaultFetcher = async ({ queryKey, signal }: { queryKey: any[]; signal?: AbortSignal }) => {
+const WalletSchema = z.object({
+  amount: z.coerce.number().positive("Amount must be > 0"),
+  currency: z.string().optional(),
+  from: z.enum(["forex", "arb", "fut"]).optional(),
+  to: z.enum(["forex", "arb", "fut"]).optional(),
+  address: z.string().optional(),
+});
+
+type TradeFormValues = z.infer<typeof TradeSchema>;
+type WalletFormValues = z.infer<typeof WalletSchema>;
+
+// ──────────────────────────────────────────────────────────────
+// 2. UTILITY: ROBUST FETCHER
+// ──────────────────────────────────────────────────────────────
+
+const authenticatedFetcher = async ({ queryKey }: { queryKey: any[] }) => {
   const [path, params] = queryKey;
-  const url = new URL(`${API_BASE}${path}`);
+  const url = new URL(`${window.location.origin}${path}`);
   const token = sessionStorage.getItem("token");
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        value.forEach((v) => url.searchParams.append(key, String(v)));
-      } else if (value !== undefined && value !== null && value !== "") {
-        url.searchParams.append(key, String(value));
-      }
+      if (Array.isArray(value)) value.forEach((v) => url.searchParams.append(key, String(v)));
+      else if (value != null && value !== "") url.searchParams.append(key, String(value));
     });
   }
 
   const res = await fetch(url.toString(), {
-    method: "GET",
-    signal,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
 
-  let data;
-  try {
-    const text = await res.text();
-    data = text ? JSON.parse(text) : {};
-  } catch (e) {
-    console.error("JSON Parse Error", e);
-    data = {};
-  }
-
   if (!res.ok) {
-    throw new Error(data.detail || `Error fetching ${path}: ${res.statusText}`);
+    const errorBody = await res.json().catch(() => ({}));
+    throw new Error(errorBody.detail || errorBody.message || "API Error");
   }
-  return data;
+  return res.json();
 };
+
+// ──────────────────────────────────────────────────────────────
+// 3. CUSTOM HOOK: SCANNER LOGIC
+// ──────────────────────────────────────────────────────────────
+
+function useArbitrageScanner() {
+  const { toast } = useToast();
+  const [isRunning, setIsRunning] = useState(false);
+  const [minProfit, setMinProfit] = useState(0.01);
+  const [foundOpps, setFoundOpps] = useState<Opportunity[]>([]);
+  const [filters, setFilters] = useState({
+    exchanges: ["BYBIT", "MEXC", "BINANCE"],
+    symbols: ["BTCUSDT", "ETHUSDT"]
+  });
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isRunning) {
+      timer = setInterval(() => {
+        setMinProfit((prev) => {
+          if (prev <= 0.0000015) {
+            setIsRunning(false);
+            toast({ title: "Scan Complete", description: "Minimum profit threshold reached." });
+            return 0.01;
+          }
+          return prev / 10;
+        });
+      }, 30_000);
+    }
+    return () => clearInterval(timer);
+  }, [isRunning, toast]);
+
+  const { data } = useQuery({
+    queryKey: ["/arb/opportunity-scanner", { ...filters, min_profit: minProfit }],
+    queryFn: authenticatedFetcher,
+    enabled: isRunning,
+    refetchInterval: 10_000,
+  });
+
+  useEffect(() => {
+    if (!data) return;
+    const newItems = Array.isArray(data) ? data : data.opportunities || [];
+    
+    if (newItems.length > 0) {
+      setFoundOpps(prev => {
+        const map = new Map(prev.map(o => [`${o.symbol}-${o.buy_exchange}-${o.sell_exchange}`, o]));
+        newItems.forEach((o: Opportunity) => map.set(`${o.symbol}-${o.buy_exchange}-${o.sell_exchange}`, o));
+        return Array.from(map.values());
+      });
+    }
+  }, [data]);
+
+  return { isRunning, toggle: () => setIsRunning(p => !p), minProfit, setMinProfit, foundOpps, filters, setFilters };
+}
+
+// ──────────────────────────────────────────────────────────────
+// 4. MAIN COMPONENT
+// ──────────────────────────────────────────────────────────────
 
 export default function Arbitrage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  // --- STATE: APP ---
+  const scanner = useArbitrageScanner();
   const [activeWallet, setActiveWallet] = useState<'arb' | 'forex' | 'fut'>('arb');
 
-  // --- STATE: SCANNER ---
-  const [selectedExchanges, setSelectedExchanges] = useState<string[]>(["BYBIT", "MEXC", "BINANCE"]);
-  const [selectedSymbols, setSelectedSymbols] = useState<string[]>(["BTCUSDT", "ETHUSDT"]);
-  const [minProfit, setMinProfit] = useState(0.001);
-  const [isScannerRunning, setIsScannerRunning] = useState(false);
-  const [emergencyStop, setEmergencyStop] = useState(false);
+  // Queries
+  const { data: userInfo, isLoading: userLoading } = useQuery<UserInfo>({
+    queryKey: ["/auth/user-info"],
+    queryFn: authenticatedFetcher,
+  });
+  const { data: exchangeList = [] } = useQuery({ queryKey: ["/arb/arbitrage-exc"], queryFn: authenticatedFetcher, staleTime: Infinity });
+  const { data: symbolList = [] } = useQuery({ queryKey: ["/arb/arbitrage-symbol"], queryFn: authenticatedFetcher, staleTime: Infinity });
+  const { data: recentTrades = [] } = useQuery({ queryKey: ["/dash/recent-trades"], queryFn: authenticatedFetcher });
+  const { data: userArbTrades = [] } = useQuery({ queryKey: ["/arb/user-arb"], queryFn: authenticatedFetcher });
 
-  // --- STATE: MODALS ---
+  // --- Forms & Modals ---
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
-  const [tradeQty, setTradeQty] = useState("0.01");
+  
+  // New State for Quick Trade Modal input
+  const [quickAmount, setQuickAmount] = useState(""); 
 
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [walletAction, setWalletAction] = useState<"deposit" | "withdraw" | "transfer">("deposit");
 
-  // --- STATE: WALLET FORMS ---
-  const [transferData, setTransferData] = useState({ amount: "", from: "forex", to: "arb" });
-  const [depositData, setDepositData] = useState({ amount: "", currency: "USDT", receipt: null as File | null });
-  const [withdrawData, setWithdrawData] = useState({ amount: "", currency: "USDT", address: "" });
+  const walletForm = useForm<WalletFormValues>({ resolver: zodResolver(WalletSchema) });
+  const manualTradeForm = useForm<TradeFormValues>({ resolver: zodResolver(TradeSchema) });
 
-  // --- RISK STATE (Hidden) ---
-  const [riskSettings, setRiskSettings] = useState(() => {
-    const defaults = { maxPos: "1000", maxDailyLoss: "100", stopLoss: "2", takeProfit: "5" };
-    const saved = localStorage.getItem("arb_risk_settings");
-    try {
-      return saved ? JSON.parse(saved) : defaults;
-    } catch (e) {
-      return defaults;
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem("arb_risk_settings", JSON.stringify(riskSettings));
-  }, [riskSettings]);
-
-  // --- QUERIES ---
-
-  // 1. User Info (Balances)
-  const { data: userInfo, isLoading: isLoadingUser } = useQuery({
-    queryKey: ["/auth/user-info"],
-    queryFn: defaultFetcher,
-    refetchInterval: 10000, 
-  });
-
-  // 2. Exchange List
-  const { data: exchangeList = [] } = useQuery({
-    queryKey: ["/arb/arbitrage-exc"],
-    queryFn: defaultFetcher,
-    staleTime: 60000,
-  });
-
-  // 3. Symbol List
-  const { data: symbolList = [] } = useQuery({
-    queryKey: ["/arb/arbitrage-symbol"],
-    queryFn: defaultFetcher,
-    staleTime: 60000,
-  });
-
-  // Helpers
-  const getExchangeName = (ex: any) => (typeof ex === 'object' ? ex.name : ex);
-  // Backend returns { "name": "BTCUSDT" }
-  const getSymbolName = (sym: any) => {
-    if (typeof sym === 'string') return sym;
-    if (typeof sym === 'object' && sym !== null) return sym.name; 
-    return '';
-  };
-
-  // --- COMPUTED: WALLET BALANCE ---
-  const currentBalance = useMemo(() => {
-    if (!userInfo) return 0;
-    const bal = userInfo[activeWallet] ?? userInfo[`${activeWallet}_balance`] ?? userInfo?.wallet?.[activeWallet] ?? 0;
-    return parseFloat(bal) || 0;
-  }, [userInfo, activeWallet]);
-
-  // --- COMPUTED: SELECTION STATES ---
-  const allExchangeNames = useMemo(() => exchangeList.map(getExchangeName), [exchangeList]);
-  const isAllExchangesSelected = exchangeList.length > 0 && selectedExchanges.length === exchangeList.length;
-
-  const allSymbolNames = useMemo(() => symbolList.map(getSymbolName), [symbolList]);
-  const isAllSymbolsSelected = symbolList.length > 0 && selectedSymbols.length === symbolList.length;
-
-  // --- TOGGLE HANDLERS ---
-  const toggleSelectAllExchanges = () => {
-    if (isScannerRunning) return;
-    if (isAllExchangesSelected) {
-      setSelectedExchanges([]); 
-    } else {
-      setSelectedExchanges(allExchangeNames);
-    }
-  };
-
-  const toggleSelectAllSymbols = () => {
-    if (isScannerRunning) return;
-    if (isAllSymbolsSelected) {
-      setSelectedSymbols([]); 
-    } else {
-      setSelectedSymbols(allSymbolNames);
-    }
-  };
-
-  const toggleExchange = (exName: string) => {
-    if (isScannerRunning) return;
-    setSelectedExchanges(prev => prev.includes(exName) ? prev.filter(e => e !== exName) : [...prev, exName]);
-  };
-
-  const toggleSymbol = (symName: string) => {
-    if (isScannerRunning) return;
-    setSelectedSymbols(prev => prev.includes(symName) ? prev.filter(s => s !== symName) : [...prev, symName]);
-  };
-
-  const cycleWallet = () => {
-    const wallets: ('arb' | 'forex' | 'fut')[] = ['arb', 'forex', 'fut'];
-    const nextIndex = (wallets.indexOf(activeWallet) + 1) % wallets.length;
-    setActiveWallet(wallets[nextIndex]);
-  };
-
-  // --- SCANNER QUERY ---
-  const { data: rawOpportunities, isLoading: isScanning } = useQuery({
-    queryKey: [
-      "/arb/opportunity-scanner",
-      {
-        exchanges: [...selectedExchanges].sort(),
-        symbols: [...selectedSymbols].sort(),
-        min_profit: Number(minProfit),
-      },
-    ],
-    queryFn: defaultFetcher,
-    enabled: isScannerRunning && !emergencyStop && !tradeModalOpen,
-    refetchInterval: 120000,
-    retry: false,
-  });
-
-  // FIX: Extract opportunities correctly from backend object structure
-  // Backend returns: { "opportunities": [ ... ] }
-  const opportunities: Opportunity[] = useMemo(() => {
-    if (!rawOpportunities) return [];
-    // If backend returns object with 'opportunities' key (as seen in screenshot)
-    if (rawOpportunities.opportunities && Array.isArray(rawOpportunities.opportunities)) {
-      return rawOpportunities.opportunities;
-    }
-    // Fallback if backend changes to direct array
-    if (Array.isArray(rawOpportunities)) return rawOpportunities;
-    return [];
-  }, [rawOpportunities]);
-
-  useEffect(() => {
-    if (tradeModalOpen && selectedOpp && opportunities.length > 0) {
-      const updatedOpp = opportunities.find(o => o.symbol === selectedOpp.symbol);
-      if (updatedOpp) setSelectedOpp(updatedOpp);
-    }
-  }, [opportunities, tradeModalOpen, selectedOpp?.symbol]);
-
-  const { data: rawHistory } = useQuery({
-    queryKey: ["/arb/user-arb"],
-    queryFn: defaultFetcher,
-    refetchInterval: 5000,
-  });
-
-  const tradeHistory: TradeHistoryItem[] = Array.isArray(rawHistory) ? rawHistory : [];
-
-  const parsedHistory = useMemo(() => {
-    return tradeHistory.map(t => ({
-      ...t,
-      profitNum: parseFloat(t.profit) || 0
-    }));
-  }, [tradeHistory]);
-
-  const stats = useMemo(() => {
-    const totalPnL = parsedHistory.reduce((acc, t) => acc + t.profitNum, 0);
-    const winningTrades = parsedHistory.filter((t) => t.profitNum > 0).length;
-    const winRate = parsedHistory.length > 0 ? ((winningTrades / parsedHistory.length) * 100).toFixed(1) : "0.0";
-    const activeCount = parsedHistory.filter((t) => t.status === 'ACTIVE' || t.status === 'PENDING').length;
-    return { totalPnL, winRate, activeCount };
-  }, [parsedHistory]);
-
-  // --- MUTATIONS ---
+  // --- Mutations ---
   const tradeMutation = useMutation({
     mutationFn: async (data: any) => {
-      const token = sessionStorage.getItem("token");
       const res = await fetch(`${API_BASE}/arb/perform-arb-trade`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionStorage.getItem("token")}` },
         body: JSON.stringify(data),
       });
-      let responseData;
-      try { responseData = await res.json(); } catch { responseData = {}; }
-      if (!res.ok) throw new Error(responseData.detail || "Trade failed");
-      return responseData;
+      if (!res.ok) throw new Error((await res.json()).detail || "Trade Failed");
+      return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Trade executed successfully", className: "bg-emerald-600 text-white" });
+      toast({ title: "Order Placed", className: "bg-emerald-600 text-white" });
+      queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] });
+      queryClient.invalidateQueries({ queryKey: ["/dash/recent-trades"] });
       queryClient.invalidateQueries({ queryKey: ["/arb/user-arb"] });
       setTradeModalOpen(false);
+      setQuickAmount("");
+      manualTradeForm.reset();
     },
-    onError: (err: Error) => toast({ title: "Trade Failed", description: err.message, variant: "destructive" }),
+    onError: (e) => toast({ title: "Trade Failed", description: e.message, variant: "destructive" }),
   });
 
-  const transferMutation = useMutation({
-    mutationFn: async () => {
-      const token = sessionStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/dash/transfer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          amount: Math.abs(parseFloat(transferData.amount)),
-          from_wallet: transferData.from,
-          to_wallet: transferData.to
-        }),
-      });
-      if (!res.ok) throw new Error((await res.json()).detail || "Transfer failed");
+  const walletMutation = useMutation({
+    mutationFn: async (data: WalletFormValues) => {
+      const endpoints = { transfer: "/dash/transfer", deposit: "/dash/deposits", withdraw: "/dash/withdrawals" };
+      const endpoint = endpoints[walletAction];
+      const headers: any = { Authorization: `Bearer ${sessionStorage.getItem("token")}` };
+      let body: any;
+
+      if (walletAction === 'deposit') {
+        const formData = new FormData();
+        formData.append("amount", String(data.amount));
+        formData.append("currency", data.currency || "USDT");
+        body = formData; 
+        delete headers["Content-Type"];
+      } else {
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify(walletAction === 'transfer' 
+          ? { amount: data.amount, from_wallet: data.from, to_wallet: data.to }
+          : { amount: data.amount, currency: data.currency, wallet_address: data.address }
+        );
+      }
+
+      const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", headers, body });
+      if (!res.ok) throw new Error((await res.json()).detail || "Transaction Failed");
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Transfer Successful", description: `$${transferData.amount} moved to ${transferData.to}` });
+      toast({ title: "Success", description: `${walletAction} submitted successfully.` });
       setWalletModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] }); 
+      walletForm.reset();
+      queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] });
     },
     onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
   });
 
-  const depositMutation = useMutation({
-    mutationFn: async () => {
-      const token = sessionStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("amount", String(Math.abs(parseFloat(depositData.amount))));
-      formData.append("currency", depositData.currency);
-      if (depositData.receipt) formData.append("receipt", depositData.receipt);
-
-      const res = await fetch(`${API_BASE}/dash/deposits`, {
-        method: "POST",
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: formData,
-      });
-      if (!res.ok) throw new Error((await res.json()).detail || "Deposit failed");
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Deposit Submitted", description: "Awaiting admin approval." });
-      setWalletModalOpen(false);
-    },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
-  });
-
-  const withdrawMutation = useMutation({
-    mutationFn: async () => {
-      const token = sessionStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/dash/withdrawals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          amount: Math.abs(parseFloat(withdrawData.amount)),
-          currency: withdrawData.currency,
-          wallet_address: withdrawData.address
-        }),
-      });
-      if (!res.ok) throw new Error((await res.json()).detail || "Withdrawal failed");
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Withdrawal Requested", description: "Processing request." });
-      setWalletModalOpen(false);
-    },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
-  });
-
-  // --- HANDLERS ---
-  const handleTradeClick = (opp: Opportunity) => {
-    if (emergencyStop) {
-      toast({ title: "Emergency Stop Active", description: "Cannot trade while emergency stop is on.", variant: "destructive" });
-      return;
-    }
+  const handleQuickTrade = (opp: Opportunity) => {
     setSelectedOpp(opp);
+    setQuickAmount(""); // Reset on open
     setTradeModalOpen(true);
   };
 
-  const confirmTrade = () => {
-    if (!selectedOpp) return;
-    const qty = parseFloat(tradeQty);
-    if (isNaN(qty) || qty <= 0) {
-      toast({ title: "Invalid Quantity", description: "Please enter a valid positive number.", variant: "destructive" });
+  const confirmQuickTrade = (qty: number) => {
+    if (!selectedOpp || isNaN(qty) || qty <= 0) {
+      toast({ title: "Invalid Amount", variant: "destructive" });
       return;
     }
     tradeMutation.mutate({
       symbol: selectedOpp.symbol,
-      buy_exchange: selectedOpp.buy_exchange, // Match new type
-      sell_exchange: selectedOpp.sell_exchange, // Match new type
-      qty: qty
+      buy_exchange: selectedOpp.buy_exchange,
+      sell_exchange: selectedOpp.sell_exchange,
+      qty
     });
   };
 
-  const openWalletModal = (action: "deposit" | "withdraw" | "transfer") => {
-    setWalletAction(action);
-    if (action === 'transfer') {
-      setTransferData(prev => ({ ...prev, from: activeWallet }));
-    }
-    setWalletModalOpen(true);
-  };
+  const toggleItem = (list: string[], item: string) => 
+    list.includes(item) ? list.filter(i => i !== item) : [...list, item];
 
-  const handleWalletSubmit = () => {
-    const actions = {
-      transfer: transferMutation.mutate,
-      deposit: depositMutation.mutate,
-      withdraw: withdrawMutation.mutate,
-    };
-    
-    const currentData = walletAction === 'transfer' ? transferData : walletAction === 'deposit' ? depositData : withdrawData;
-    const amount = parseFloat(currentData.amount);
-    
-    if (isNaN(amount) || amount <= 0) {
-       toast({ title: "Invalid Amount", description: "Please enter a positive number.", variant: "destructive" });
-       return;
-    }
-    if (walletAction === 'deposit' && !depositData.receipt) {
-       toast({ title: "Missing Receipt", description: "Please upload a receipt image.", variant: "destructive" });
-       return;
-    }
-    actions[walletAction]();
-  };
+  const getBalance = () => userInfo ? userInfo[`balance_${activeWallet}` as keyof UserInfo] || 0 : 0;
 
   return (
     <Layout>
       <div className="w-full min-h-screen bg-gray-950 px-4 py-6 space-y-6">
 
-        {/* --- HEADER --- */}
-        <Card className="bg-gray-900 border-gray-800 p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-900 p-6 rounded-xl border border-gray-800 shadow-lg">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
               Arbitrage Scanner
-              <span className={`h-3 w-3 rounded-full shadow-[0_0_10px] ${isScannerRunning && !emergencyStop ? 'bg-emerald-500 shadow-emerald-500/50 animate-pulse' : 'bg-gray-600'}`}></span>
+              {scanner.isRunning && (
+                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 animate-pulse">
+                  Scanning @ {(scanner.minProfit * 100).toFixed(3)}%
+                </Badge>
+              )}
             </h1>
             <p className="text-gray-400 text-sm mt-1">Real-time cross-exchange opportunity detector.</p>
           </div>
-          <div className="flex items-center gap-4">
-            {emergencyStop && <Badge variant="destructive" className="animate-pulse">EMERGENCY STOP ACTIVE</Badge>}
-            <Button
-              onClick={() => setIsScannerRunning(!isScannerRunning)}
-              disabled={emergencyStop}
-              className={`${isScannerRunning ? 'bg-red-500/10 text-red-500 border border-red-500/50 hover:bg-red-500/20' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} min-w-[140px]`}
-            >
-              <i className={`ri-${isScannerRunning ? 'stop' : 'play'}-circle-line mr-2`}></i>
-              {isScannerRunning ? "Stop Scanner" : "Start Scanner"}
-            </Button>
-          </div>
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 relative">
           
-          {/* --- SIDEBAR --- */}
-          <div className="lg:col-span-1 sticky top-6 h-[calc(100vh-40px)] overflow-y-auto pr-2 space-y-4 flex flex-col custom-scrollbar">
-            
-            {/* 1. EXCHANGES */}
-            <Card className="bg-gray-900 border-gray-800 p-5 shrink-0 flex flex-col h-[32vh] min-h-[250px]">
-              <div className="flex justify-between items-center mb-4 shrink-0">
-                <h3 className="font-bold text-white">Exchanges</h3>
-                <span 
-                  onClick={toggleSelectAllExchanges} 
-                  className={`text-xs text-emerald-400 cursor-pointer hover:underline ${isScannerRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isAllExchangesSelected ? "Deselect All" : "Select All"}
-                </span>
-              </div>
-              <ScrollArea className="flex-1 pr-3 -mr-3">
-                <div className={`space-y-2 pr-3 pb-2 ${isScannerRunning ? 'opacity-50 pointer-events-none' : ''}`}>
-                  {exchangeList.length === 0 ? <div className="text-gray-500 text-xs text-center pt-10">Loading exchanges...</div> : null}
-                  {exchangeList.map((ex: any, i: number) => {
-                    const name = getExchangeName(ex);
-                    const isSelected = selectedExchanges.includes(name);
-                    return (
-                      <div key={i} onClick={() => toggleExchange(name)}
-                        className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-emerald-900/20 border border-emerald-500/30' : 'hover:bg-gray-800 border border-transparent'}`}>
-                        <span className={`text-sm ${isSelected ? 'text-emerald-300' : 'text-gray-400'}`}>{name}</span>
-                        {isSelected && <i className="ri-check-line text-emerald-400"></i>}
-                      </div>
-                    )
-                  })}
-                </div>
+          <div className="flex gap-3 w-full md:w-auto">
+             <Sheet>
+               <SheetTrigger asChild>
+                 <Button variant="outline" className="lg:hidden border-gray-700 text-gray-300">
+                   <Filter className="w-4 h-4 mr-2" /> Filters
+                 </Button>
+               </SheetTrigger>
+               <SheetContent side="left" className="bg-gray-900 border-gray-800 text-white">
+                 <SheetHeader className="mb-4"><SheetTitle className="text-white">Scanner Filters</SheetTitle></SheetHeader>
+                 <FilterContent 
+                    exchanges={exchangeList} 
+                    symbols={symbolList}
+                    selectedExchanges={scanner.filters.exchanges}
+                    selectedSymbols={scanner.filters.symbols}
+                    onToggleExchange={(e: string) => scanner.setFilters(p => ({...p, exchanges: toggleItem(p.exchanges, e)}))}
+                    onToggleSymbol={(s: string) => scanner.setFilters(p => ({...p, symbols: toggleItem(p.symbols, s)}))}
+                    disabled={scanner.isRunning}
+                 />
+               </SheetContent>
+             </Sheet>
+
+             <Button 
+               onClick={scanner.toggle}
+               className={scanner.isRunning ? "bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/50" : "bg-emerald-600 hover:bg-emerald-700 text-white"}
+             >
+               {scanner.isRunning ? <Square className="mr-2 h-4 w-4 fill-current"/> : <Play className="mr-2 h-4 w-4 fill-current"/>}
+               {scanner.isRunning ? "Stop Scanner" : "Start Scanner"}
+             </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+          
+          {/* SIDEBAR */}
+          <div className="hidden lg:block lg:col-span-1 space-y-6 sticky top-6">
+            <Card className="bg-gray-900 border-gray-800 h-[calc(100vh-200px)] overflow-hidden flex flex-col">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm uppercase tracking-wider text-gray-400">Market Filters</CardTitle>
+              </CardHeader>
+              <ScrollArea className="flex-1 p-4 pt-0">
+                <FilterContent 
+                    exchanges={exchangeList} 
+                    symbols={symbolList}
+                    selectedExchanges={scanner.filters.exchanges}
+                    selectedSymbols={scanner.filters.symbols}
+                    onToggleExchange={(e: string) => scanner.setFilters(p => ({...p, exchanges: toggleItem(p.exchanges, e)}))}
+                    onToggleSymbol={(s: string) => scanner.setFilters(p => ({...p, symbols: toggleItem(p.symbols, s)}))}
+                    disabled={scanner.isRunning}
+                 />
               </ScrollArea>
             </Card>
-
-            {/* 2. SYMBOLS */}
-            <Card className="bg-gray-900 border-gray-800 p-5 shrink-0 flex flex-col h-[32vh] min-h-[250px]">
-              <div className="flex justify-between items-center mb-4 shrink-0">
-                <h3 className="font-bold text-white">Symbols</h3>
-                <span 
-                  onClick={toggleSelectAllSymbols} 
-                  className={`text-xs text-emerald-400 cursor-pointer hover:underline ${isScannerRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isAllSymbolsSelected ? "Deselect All" : "Select All"}
-                </span>
-              </div>
-              <ScrollArea className="flex-1 pr-3 -mr-3">
-                <div className={`space-y-2 pr-3 pb-2 ${isScannerRunning ? 'opacity-50 pointer-events-none' : ''}`}>
-                  {symbolList.length === 0 ? <div className="text-gray-500 text-xs text-center pt-10">Loading symbols...</div> : null}
-                  {symbolList.map((sym: any, i: number) => {
-                    const name = getSymbolName(sym);
-                    const isSelected = selectedSymbols.includes(name);
-                    return (
-                      <div key={i} onClick={() => toggleSymbol(name)}
-                        className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-emerald-900/20 border border-emerald-500/30' : 'hover:bg-gray-800 border border-transparent'}`}>
-                        <span className={`text-sm ${isSelected ? 'text-emerald-300' : 'text-gray-400'}`}>{name}</span>
-                        {isSelected && <i className="ri-check-line text-emerald-400"></i>}
-                      </div>
-                    )
-                  })}
-                </div>
-              </ScrollArea>
-            </Card>
-
-            {/* 3. WALLET */}
-            <Card className="bg-gray-900 border-gray-800 p-5 space-y-4 shrink-0">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold text-white flex items-center gap-2"><i className="ri-wallet-3-line"></i> Wallet</h3>
-                <Badge 
-                  variant="outline" 
-                  onClick={cycleWallet}
-                  className="border-gray-700 text-emerald-400 cursor-pointer hover:bg-emerald-900/20 hover:border-emerald-500/50 transition-all select-none capitalize"
-                >
-                  {activeWallet}
-                </Badge>
-              </div>
-              <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-4 border border-gray-700 text-center">
-                <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">{activeWallet} Balance</p>
-                <h2 className="text-3xl font-bold text-white tracking-tight">
-                  {isLoadingUser ? <span className="animate-pulse">...</span> : `$${currentBalance.toFixed(2)}`}
-                </h2>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <Button variant="outline" size="sm" onClick={() => openWalletModal("deposit")} className="border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/10 text-xs">Deposit</Button>
-                <Button variant="outline" size="sm" onClick={() => openWalletModal("withdraw")} className="border-red-600/30 text-red-400 hover:bg-red-600/10 text-xs">Withdraw</Button>
-                <Button variant="outline" size="sm" onClick={() => openWalletModal("transfer")} className="border-blue-600/30 text-blue-400 hover:bg-blue-600/10 text-xs">Transfer</Button>
-              </div>
-            </Card>
-
           </div>
 
-          {/* --- MAIN CONTENT --- */}
+          {/* MAIN CONTENT */}
           <div className="lg:col-span-3 space-y-6">
+            
+            {/* STATS STRIP */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="bg-gray-900 border-gray-800 p-4 flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-2">
+                   <div>
+                     <p className="text-xs text-gray-500 uppercase font-bold">{activeWallet} Wallet</p>
+                     <h2 className="text-2xl font-bold text-white mt-1">
+                       {userLoading ? <Loader2 className="animate-spin w-5 h-5"/> : `$${getBalance().toFixed(2)}`}
+                     </h2>
+                   </div>
+                   <Select value={activeWallet} onValueChange={(v: any) => setActiveWallet(v)}>
+                     <SelectTrigger className="w-[100px] h-8 text-xs bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
+                     <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                       <SelectItem value="arb">Arb</SelectItem>
+                       <SelectItem value="forex">Forex</SelectItem>
+                       <SelectItem value="fut">Futures</SelectItem>
+                     </SelectContent>
+                   </Select>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs border-emerald-500/30 text-emerald-400" onClick={() => { setWalletAction('deposit'); setWalletModalOpen(true); }}>Deposit</Button>
+                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs border-blue-500/30 text-blue-400" onClick={() => { setWalletAction('transfer'); setWalletModalOpen(true); }}>Transfer</Button>
+                </div>
+              </Card>
+
+              <Card className="bg-gray-900 border-gray-800 p-4 flex flex-col justify-center items-center">
+                 <p className="text-xs text-gray-500 uppercase">Total P&L</p>
+                 <p className={`text-2xl font-bold ${userInfo?.total_pl && userInfo.total_pl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                   {userInfo?.total_pl ? `$${userInfo.total_pl.toFixed(2)}` : '$0.00'}
+                 </p>
+              </Card>
+              <Card className="bg-gray-900 border-gray-800 p-4 flex flex-col justify-center items-center">
+                 <p className="text-xs text-gray-500 uppercase">Live Opps</p>
+                 <p className="text-2xl font-bold text-white">{scanner.foundOpps.length}</p>
+              </Card>
+            </div>
+
             <Tabs defaultValue="scanner" className="w-full">
-              <TabsList className="bg-gray-900 border border-gray-800 p-1">
-                <TabsTrigger value="scanner" className="data-[state=active]:bg-emerald-600">Scanner</TabsTrigger>
+              <TabsList className="bg-gray-900 border border-gray-800 p-1 w-full justify-start">
+                <TabsTrigger value="scanner" className="flex-1 sm:flex-none w-32 data-[state=active]:bg-emerald-600">Scanner</TabsTrigger>
+                <TabsTrigger value="manual" className="flex-1 sm:flex-none w-32 data-[state=active]:bg-emerald-600">Manual Trade</TabsTrigger>
+                <TabsTrigger value="history" className="flex-1 sm:flex-none w-32 data-[state=active]:bg-emerald-600">History</TabsTrigger>
               </TabsList>
 
-              {/* SCANNER TAB */}
-              <TabsContent value="scanner" className="space-y-6 mt-4">
-                {/* Stats Bar */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <Card className="bg-gray-900 border-gray-800 p-4">
-                    <p className="text-xs text-gray-500">Live Opportunities</p>
-                    <p className="text-2xl font-bold text-white">{opportunities.length}</p>
-                  </Card>
-                  <Card className="bg-gray-900 border-gray-800 p-4">
-                    <p className="text-xs text-gray-500">Total PnL</p>
-                    <p className={`text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>${stats.totalPnL.toFixed(2)}</p>
-                  </Card>
-                  <Card className="bg-gray-900 border-gray-800 p-4">
-                    <p className="text-xs text-gray-500">Active Trades</p>
-                    <p className="text-2xl font-bold text-blue-400">{stats.activeCount}</p>
-                  </Card>
-                  <Card className="bg-gray-900 border-gray-800 p-4 flex flex-col justify-center">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs text-gray-400">Min Profit</Label>
-                      <Input
-                        type="number"
-                        disabled={isScannerRunning}
-                        className="w-16 h-7 bg-gray-800 border-gray-700 text-xs text-right [&::-webkit-inner-spin-button]:appearance-none"
-                        value={minProfit}
-                        onChange={(e) => setMinProfit(parseFloat(e.target.value))}
-                      />
-                    </div>
-                  </Card>
-                </div>
-
-                {/* Opportunities Table */}
+              {/* SCANNER TABLE */}
+              <TabsContent value="scanner" className="mt-4">
                 <Card className="bg-gray-900 border-gray-800 overflow-hidden min-h-[400px]">
                   <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-950/50 border-b border-gray-800">
-                        <tr className="text-left text-xs text-gray-400 uppercase tracking-wider">
-                          <th className="p-4">Symbol</th>
-                          <th className="p-4">Strategy</th>
+                    <table className="w-full min-w-[700px]">
+                      <thead className="bg-gray-950/50 border-b border-gray-800 text-xs text-gray-400 uppercase">
+                        <tr>
+                          <th className="p-4 text-left">Symbol</th>
+                          <th className="p-4 text-left">Strategy</th>
+                          <th className="p-4 text-right">Prices (Buy/Sell)</th>
                           <th className="p-4 text-right">Spread</th>
-                          <th className="p-4 text-right">Profit %</th>
                           <th className="p-4 text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-800">
-                        {isScanning && opportunities.length === 0 ? (
-                          <tr><td colSpan={5} className="p-8 text-center text-gray-500 animate-pulse">Scanning markets...</td></tr>
-                        ) : opportunities.length === 0 ? (
-                          <tr><td colSpan={5} className="p-8 text-center text-gray-500">No opportunities found. Adjust filters or start scanner.</td></tr>
+                        {scanner.foundOpps.length === 0 ? (
+                          <tr><td colSpan={5} className="p-12 text-center text-gray-500">
+                            {scanner.isRunning ? <span className="flex items-center justify-center gap-2"><Loader2 className="animate-spin w-4 h-4"/> Scanning...</span> : "Scanner Idle. Press start."}
+                          </td></tr>
                         ) : (
-                          opportunities.map((opp, idx) => (
+                          scanner.foundOpps.map((opp, idx) => (
                             <tr key={idx} className="hover:bg-gray-800/50 transition-colors">
-                              <td className="p-4 font-medium text-white">{opp.symbol}</td>
-                              <td className="p-4 text-sm text-gray-400">
-                                <span className="text-blue-400">{opp.buy_exchange}</span> <i className="ri-arrow-right-line px-1"></i> <span className="text-purple-400">{opp.sell_exchange}</span>
+                              <td className="p-4 font-bold text-white">{opp.symbol}</td>
+                              <td className="p-4 text-sm">
+                                <span className="text-blue-400">{opp.buy_exchange}</span> 
+                                <span className="mx-2 text-gray-600">→</span> 
+                                <span className="text-purple-400">{opp.sell_exchange}</span>
                               </td>
-                              <td className="p-4 text-right font-mono text-xs text-gray-300">
+                              <td className="p-4 text-right font-mono text-sm text-gray-300">
                                 ${opp.buy_price} / ${opp.sell_price}
                               </td>
-                              {/* FIX: Corrected property access for profit percent */}
                               <td className="p-4 text-right font-bold text-emerald-400">
-                                +{opp.profit_percent ? (opp.profit_percent * 100).toFixed(2) : 0}%
+                                +{(opp.profit_percent * 100).toFixed(2)}%
                               </td>
                               <td className="p-4 text-right">
-                                <Button size="sm" onClick={() => handleTradeClick(opp)} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs">Trade</Button>
+                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 h-8" onClick={() => handleQuickTrade(opp)}>Trade</Button>
                               </td>
                             </tr>
                           ))
@@ -600,166 +423,226 @@ export default function Arbitrage() {
                   </div>
                 </Card>
               </TabsContent>
-            </Tabs>
 
-            {/* HISTORY SECTION */}
-            <div className="mt-8">
-              <h3 className="text-lg font-bold text-white mb-4">Trade History</h3>
-              <div className="space-y-3">
-                {parsedHistory.length === 0 ? (
-                  <Card className="bg-gray-900 border-gray-800 p-6 text-center text-gray-500">No trading history available.</Card>
-                ) : (
-                  parsedHistory.map((trade) => (
-                    <Card key={trade.id} className="bg-gray-900 border-gray-800 p-4 flex items-center justify-between">
-                      <div>
-                        <div className="font-bold text-white">{trade.symbol}</div>
-                        <div className="text-xs text-gray-500">{trade.buy_exchange} → {trade.sell_exchange}</div>
-                      </div>
-                      <Badge variant={trade.status === 'COMPLETED' ? 'default' : 'secondary'} className={trade.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}>{trade.status}</Badge>
-                      <div className={`font-mono font-bold ${trade.profitNum >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {trade.profitNum > 0 ? '+' : ''}{trade.profitNum.toFixed(2)}
-                      </div>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </div>
+              {/* MANUAL TRADE */}
+              <TabsContent value="manual" className="mt-4">
+                 <Card className="bg-gray-900 border-gray-800 max-w-2xl mx-auto">
+                    <CardHeader><CardTitle>Manual Execution</CardTitle><CardDescription>Execute a trade on specific exchanges.</CardDescription></CardHeader>
+                    <CardContent>
+                       <form onSubmit={manualTradeForm.handleSubmit((d) => tradeMutation.mutate(d))} className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                                <Label>Symbol</Label>
+                                <Input {...manualTradeForm.register("symbol")} placeholder="e.g. BTCUSDT" className="bg-gray-800 border-gray-700"/>
+                                {manualTradeForm.formState.errors.symbol && <p className="text-red-500 text-xs">{manualTradeForm.formState.errors.symbol.message}</p>}
+                             </div>
+                             <div className="space-y-2">
+                                <Label>Quantity</Label>
+                                <Input 
+                                  type="text" 
+                                  inputMode="decimal"
+                                  placeholder="0.00"
+                                  {...manualTradeForm.register("qty")} 
+                                  className="bg-gray-800 border-gray-700"
+                                />
+                                {manualTradeForm.formState.errors.qty && <p className="text-red-500 text-xs">{manualTradeForm.formState.errors.qty.message}</p>}
+                             </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                                <Label>Buy From</Label>
+                                <Select onValueChange={(v) => manualTradeForm.setValue("buy_exchange", v)}>
+                                   <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue placeholder="Exchange" /></SelectTrigger>
+                                   <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                                     {exchangeList.map((e: any) => <SelectItem key={e.name || e} value={e.name || e}>{e.name || e}</SelectItem>)}
+                                   </SelectContent>
+                                </Select>
+                             </div>
+                             <div className="space-y-2">
+                                <Label>Sell To</Label>
+                                <Select onValueChange={(v) => manualTradeForm.setValue("sell_exchange", v)}>
+                                   <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue placeholder="Exchange" /></SelectTrigger>
+                                   <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                                     {exchangeList.map((e: any) => <SelectItem key={e.name || e} value={e.name || e}>{e.name || e}</SelectItem>)}
+                                   </SelectContent>
+                                </Select>
+                             </div>
+                          </div>
+                          <Button disabled={tradeMutation.isPending} className="w-full bg-emerald-600 hover:bg-emerald-500 mt-4">
+                            {tradeMutation.isPending ? "Executing..." : "Place Order"}
+                          </Button>
+                       </form>
+                    </CardContent>
+                 </Card>
+              </TabsContent>
+              
+              {/* HISTORY */}
+              <TabsContent value="history" className="mt-4">
+                <Card className="bg-gray-900 border-gray-800">
+                  <div className="p-4 space-y-2">
+                     {userArbTrades.length === 0 ? <p className="text-gray-500 text-center">No trade history.</p> : userArbTrades.map((t: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+                           <div>
+                              <p className="font-bold text-white text-sm">{t.symbol}</p>
+                              <p className="text-xs text-gray-400">{t.buy_exchange} → {t.sell_exchange}</p>
+                           </div>
+                           <div className="text-right">
+                              <Badge variant="outline" className={t.status === 'COMPLETED' ? 'text-emerald-400 border-emerald-500/30' : 'text-blue-400 border-blue-500/30'}>{t.status}</Badge>
+                              <p className="text-xs font-mono mt-1 text-gray-300">{t.profit_loss ? `$${t.profit_loss}` : '---'}</p>
+                           </div>
+                        </div>
+                     ))}
+                  </div>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>
 
-      {/* --- MODAL: TRADE EXECUTION --- */}
+      {/* --- QUICK TRADE MODAL --- */}
       <Dialog open={tradeModalOpen} onOpenChange={setTradeModalOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white">
-          <DialogHeader>
-            <DialogTitle>Execute Arbitrage</DialogTitle>
-            <DialogDescription>Confirm trade details below. Data updates live.</DialogDescription>
-          </DialogHeader>
-          {selectedOpp && (
-            <div className="space-y-4 py-2">
-              <div className="flex justify-between p-3 bg-gray-800 rounded border border-gray-700">
-                <div className="text-center"><div className="text-xs text-gray-400">Buy</div><div className="font-bold text-blue-400">{selectedOpp.buy_exchange}</div></div>
-                <div className="text-center"><div className="text-xs text-gray-400">Sell</div><div className="font-bold text-purple-400">{selectedOpp.sell_exchange}</div></div>
-                {/* FIX: Corrected property access in modal */}
-                <div className="text-center"><div className="text-xs text-gray-400">Spread</div><div className="font-bold text-emerald-400">{(selectedOpp.profit_percent * 100).toFixed(2)}%</div></div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 text-center">
-                 <span>Buy @ {selectedOpp.buy_price}</span>
-                 <span>Sell @ {selectedOpp.sell_price}</span>
-              </div>
-              <div>
-                <Label>Quantity ({selectedOpp.symbol.replace("USDT", "")})</Label>
-                <Input 
-                  type="number" 
-                  value={tradeQty} 
-                  onChange={(e) => setTradeQty(e.target.value)} 
-                  className="bg-gray-800 border-gray-700 mt-1 [&::-webkit-inner-spin-button]:appearance-none" 
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setTradeModalOpen(false)}>Cancel</Button>
-            <Button onClick={confirmTrade} disabled={tradeMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              {tradeMutation.isPending ? "Executing..." : "Confirm Trade"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+         <DialogContent className="bg-gray-900 border-gray-800 text-white">
+            <DialogHeader><DialogTitle>Quick Trade: {selectedOpp?.symbol}</DialogTitle></DialogHeader>
+            {selectedOpp && (
+               <div className="space-y-4">
+                  <div className="flex justify-between text-sm bg-gray-800 p-3 rounded">
+                     <span>Spread: <span className="text-emerald-400 font-bold">{(selectedOpp.profit_percent * 100).toFixed(2)}%</span></span>
+                     <span>Price: {selectedOpp.buy_price}</span>
+                  </div>
+                  <div>
+                     <Label>Quantity</Label>
+                     <Input 
+                       type="text" 
+                       inputMode="decimal"
+                       autoFocus
+                       placeholder="Amount" 
+                       value={quickAmount}
+                       className="bg-gray-800 border-gray-700 mt-1"
+                       onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d*$/.test(val)) setQuickAmount(val);
+                       }}
+                       onKeyDown={(e) => {
+                          if (e.key === 'Enter') confirmQuickTrade(parseFloat(quickAmount));
+                       }}
+                     />
+                  </div>
+                  <Button className="w-full bg-emerald-600" onClick={() => confirmQuickTrade(parseFloat(quickAmount))}>
+                    Confirm Execution
+                  </Button>
+               </div>
+            )}
+         </DialogContent>
       </Dialog>
 
-      {/* --- MODAL: WALLET ACTIONS --- */}
+      {/* --- WALLET MODAL --- */}
       <Dialog open={walletModalOpen} onOpenChange={setWalletModalOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white">
-          <DialogHeader>
-            <DialogTitle className="capitalize">{walletAction} Funds</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* TRANSFER FORM */}
-            {walletAction === "transfer" && (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>From</Label>
-                    <Select value={transferData.from} onValueChange={(v) => setTransferData({ ...transferData, from: v })}>
-                      <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-gray-800 border-gray-700 text-white">
-                        <SelectItem value="forex">Forex</SelectItem>
-                        <SelectItem value="arb">Arbitrage</SelectItem>
-                        <SelectItem value="fut">Futures</SelectItem>
-                      </SelectContent>
-                    </Select>
+         <DialogContent className="bg-gray-900 border-gray-800 text-white">
+            <DialogHeader><DialogTitle className="capitalize">{walletAction} Assets</DialogTitle></DialogHeader>
+            <form onSubmit={walletForm.handleSubmit((d) => walletMutation.mutate(d))} className="space-y-4 mt-2">
+               {walletAction === 'transfer' && (
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-1">
+                        <Label>From</Label>
+                        <Select onValueChange={v => walletForm.setValue("from", v as any)} defaultValue="forex">
+                           <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
+                           <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                              <SelectItem value="forex">Forex</SelectItem><SelectItem value="arb">Arb</SelectItem><SelectItem value="fut">Futures</SelectItem>
+                           </SelectContent>
+                        </Select>
+                     </div>
+                     <div className="space-y-1">
+                        <Label>To</Label>
+                        <Select onValueChange={v => walletForm.setValue("to", v as any)} defaultValue="arb">
+                           <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
+                           <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                              <SelectItem value="forex">Forex</SelectItem><SelectItem value="arb">Arb</SelectItem><SelectItem value="fut">Futures</SelectItem>
+                           </SelectContent>
+                        </Select>
+                     </div>
                   </div>
-                  <div>
-                    <Label>To</Label>
-                    <Select value={transferData.to} onValueChange={(v) => setTransferData({ ...transferData, to: v })}>
-                      <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-gray-800 border-gray-700 text-white">
-                        <SelectItem value="forex">Forex</SelectItem>
-                        <SelectItem value="arb">Arbitrage</SelectItem>
-                        <SelectItem value="fut">Futures</SelectItem>
-                      </SelectContent>
-                    </Select>
+               )}
+               
+               {walletAction === 'withdraw' && (
+                  <div className="space-y-2">
+                     <Label>Wallet Address</Label>
+                     <Input {...walletForm.register("address")} className="bg-gray-800 border-gray-700" placeholder="0x..." />
                   </div>
-                </div>
-                <div>
-                  <Label>Amount</Label>
-                  <Input 
-                    type="number" 
-                    value={transferData.amount} 
-                    onChange={(e) => setTransferData({ ...transferData, amount: e.target.value })} 
-                    className="bg-gray-800 border-gray-700 mt-1 [&::-webkit-inner-spin-button]:appearance-none" 
-                  />
-                </div>
-              </>
-            )}
+               )}
 
-            {/* DEPOSIT FORM */}
-            {walletAction === "deposit" && (
-              <>
-                <div>
-                  <Label>Amount</Label>
-                  <Input 
-                    type="number" 
-                    value={depositData.amount} 
-                    onChange={(e) => setDepositData({ ...depositData, amount: e.target.value })} 
-                    className="bg-gray-800 border-gray-700 mt-1 [&::-webkit-inner-spin-button]:appearance-none" 
-                  />
-                </div>
-                <div><Label>Receipt (Image)</Label><Input type="file" onChange={(e) => setDepositData({ ...depositData, receipt: e.target.files?.[0] || null })} className="bg-gray-800 border-gray-700 mt-1 cursor-pointer" /></div>
-              </>
-            )}
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                     <Label>Amount</Label>
+                     <Input 
+                       type="text" 
+                       inputMode="decimal" 
+                       {...walletForm.register("amount")} 
+                       className="bg-gray-800 border-gray-700" 
+                     />
+                     {walletForm.formState.errors.amount && <p className="text-red-500 text-xs">{walletForm.formState.errors.amount.message}</p>}
+                  </div>
+                  {(walletAction === 'deposit' || walletAction === 'withdraw') && (
+                     <div className="space-y-1">
+                        <Label>Asset</Label>
+                        <Select onValueChange={v => walletForm.setValue("currency", v)} defaultValue="USDT">
+                           <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
+                           <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                              <SelectItem value="USDT">USDT</SelectItem><SelectItem value="BTC">BTC</SelectItem><SelectItem value="ETH">ETH</SelectItem>
+                           </SelectContent>
+                        </Select>
+                     </div>
+                  )}
+               </div>
 
-            {/* WITHDRAW FORM */}
-            {walletAction === "withdraw" && (
-              <>
-                <div>
-                  <Label>Amount</Label>
-                  <Input 
-                    type="number" 
-                    value={withdrawData.amount} 
-                    onChange={(e) => setWithdrawData({ ...withdrawData, amount: e.target.value })} 
-                    className="bg-gray-800 border-gray-700 mt-1 [&::-webkit-inner-spin-button]:appearance-none" 
-                  />
-                </div>
-                <div><Label>Wallet Address</Label><Input value={withdrawData.address} onChange={(e) => setWithdrawData({ ...withdrawData, address: e.target.value })} className="bg-gray-800 border-gray-700 mt-1" placeholder="0x..." /></div>
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setWalletModalOpen(false)}>Cancel</Button>
-            <Button 
-              onClick={handleWalletSubmit} 
-              disabled={transferMutation.isPending || depositMutation.isPending || withdrawMutation.isPending}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white capitalize"
-            >
-              {(transferMutation.isPending || depositMutation.isPending || withdrawMutation.isPending) 
-                ? "Processing..." 
-                : `Confirm ${walletAction}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+               <Button disabled={walletMutation.isPending} className="w-full bg-emerald-600 hover:bg-emerald-500 capitalize">
+                  {walletMutation.isPending ? "Processing..." : `Confirm ${walletAction}`}
+               </Button>
+            </form>
+         </DialogContent>
       </Dialog>
-
     </Layout>
   );
 }
+
+// ──────────────────────────────────────────────────────────────
+// 5. HELPER COMPONENT: FILTER CONTENT
+// ──────────────────────────────────────────────────────────────
+const FilterContent = ({ exchanges, symbols, selectedExchanges, selectedSymbols, onToggleExchange, onToggleSymbol, disabled }: any) => {
+  const getName = (item: any) => typeof item === 'object' ? item.name || "Unknown" : item;
+
+  return (
+    <div className={`space-y-6 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div>
+        <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase">Exchanges</h4>
+        <div className="space-y-1">
+          {exchanges.map((ex: any, i: number) => {
+             const name = getName(ex);
+             const isSelected = selectedExchanges.includes(name);
+             return (
+               <div key={i} onClick={() => onToggleExchange(name)} className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${isSelected ? 'bg-emerald-900/20 text-emerald-300 border border-emerald-500/30' : 'text-gray-400 hover:bg-gray-800 border border-transparent'}`}>
+                  <span>{name}</span>
+                  {isSelected && <CheckCircle2 className="w-3 h-3"/>}
+               </div>
+             );
+          })}
+        </div>
+      </div>
+      <div>
+        <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase">Pairs</h4>
+        <div className="space-y-1">
+          {symbols.map((sym: any, i: number) => {
+             const name = getName(sym);
+             const isSelected = selectedSymbols.includes(name);
+             return (
+               <div key={i} onClick={() => onToggleSymbol(name)} className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${isSelected ? 'bg-emerald-900/20 text-emerald-300 border border-emerald-500/30' : 'text-gray-400 hover:bg-gray-800 border border-transparent'}`}>
+                  <span>{name}</span>
+                  {isSelected && <CheckCircle2 className="w-3 h-3"/>}
+               </div>
+             );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};

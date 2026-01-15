@@ -1,7 +1,6 @@
 import * as React from "react"
 
-// Updated to 1024px (Tailwind's 'lg') to match your Header's mobile menu breakpoint.
-// Now your JS logic and CSS layout will switch at the exact same width.
+
 const MOBILE_BREAKPOINT = 1024
 
 export function useIsMobile() {

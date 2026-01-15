@@ -1,4 +1,5 @@
 import { Header } from "./Header";
+import { Toaster } from "@/components/ui/toaster";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -7,19 +8,24 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-emerald-500/30 flex flex-col">
-      {/* Header is sticky (defined in Header.tsx), so it stays visible 
-        as the user scrolls the window.
+      {/* Sticky Header 
+        Note: The 'sticky' behavior is defined inside the Header component classes 
       */}
       <Header />
       
-      {/* Main Content Area:
-        - flex-1: Ensures it fills available vertical space if content is short.
-        - w-full: Prevents horizontal overflow issues.
-        - relative: Establishes a positioning context for children.
+      {/* Main Content Area 
+        flex-1: Pushes the footer down (if you add one later)
+        w-full: Ensures full width constraints
+        overflow-x-hidden: Prevents horizontal scrolling from wide tables/charts
       */}
-      <main className="flex-1 w-full relative">
+      <main className="flex-1 w-full relative overflow-x-hidden">
         {children}
       </main>
+
+      {/* Global Toaster 
+        This renders the toast notifications triggered from any child component 
+      */}
+      <Toaster />
     </div>
   );
 }

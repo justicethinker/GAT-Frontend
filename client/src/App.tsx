@@ -1,186 +1,231 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect, useRef, useCallback } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 
-// Pages
-import NotFound from "@/pages/not-found";
-import LandingPage from "@/pages/LandingPage";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import ResetPassword from "@/pages/ResetPassword";
-import Dashboard from "@/pages/Dashboard";
-import Arbitrage from "@/pages/Arbitrage";
-import Forex from "@/pages/Forex";
-import Futures from "@/pages/Futures";
-import Wallet from "@/pages/Wallet";
-import Admin from "@/pages/Admin";
-import Profile from "@/pages/Profile";
-import Settings from "@/pages/Settings";
-import AdminLogin from "@/pages/AdminLogin";
+// Types
+interface UserInfo {
+  isAdmin?: boolean;
+}
 
-// ──────────────────────────────────────────────────────────────
-// AUTH HELPERS
-// ──────────────────────────────────────────────────────────────
-const isAuthenticated = () => !!sessionStorage.getItem("token");
+// Lazy Load Pages
+const NotFound = lazy(() => import("@/pages/not-found"));
+const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const Login = lazy(() => import("@/pages/Login"));
+const Register = lazy(() => import("@/pages/Register"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Arbitrage = lazy(() => import("@/pages/Arbitrage"));
+const Forex = lazy(() => import("@/pages/Forex"));
+const Futures = lazy(() => import("@/pages/Futures"));
+const Wallet = lazy(() => import("@/pages/Wallet"));
+const Admin = lazy(() => import("@/pages/Admin"));
+const Profile = lazy(() => import("@/pages/Profile"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const AdminLogin = lazy(() => import("@/pages/AdminLogin"));
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+// Centralized logout
+const clearAuth = () => {
+  sessionStorage.clear(); 
+  localStorage.removeItem("token"); 
+  localStorage.removeItem("isAdmin"); 
+  queryClient.clear();
+};
+
+/**
+ * useIdleTimer
+ * Automatically logs out the user after 15 minutes of inactivity.
+ */
+function useIdleTimer() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const IDLE_LIMIT = 15 * 60 * 1000; 
+
+  const logoutUser = useCallback(() => {
+    if (sessionStorage.getItem("token")) {
+      clearAuth();
+      setLocation("/login");
+      toast({
+        title: "Session Expired",
+        description: "You have been logged out due to inactivity.",
+        variant: "destructive",
+      });
+    }
+  }, [setLocation, toast]);
+
+  const resetTimer = useCallback(() => {
+    if (!sessionStorage.getItem("token")) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(logoutUser, IDLE_LIMIT);
+  }, [logoutUser]);
+
+  useEffect(() => {
+    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
+    const handleActivity = () => resetTimer();
+    events.forEach((event) => window.addEventListener(event, handleActivity));
+    resetTimer(); // Initial start
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      events.forEach((event) => window.removeEventListener(event, handleActivity));
+    };
+  }, [resetTimer]);
+}
+
+// ──────────────────────────────────────────────────────────────
+// COMPONENTS
+// ──────────────────────────────────────────────────────────────
+
+const FullScreenLoader = ({ label = "Loading GAT System..." }: { label?: string }) => (
+  <div className="min-h-screen bg-slate-950 flex items-center justify-center relative overflow-hidden">
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none" />
+    <div className="text-center relative z-10">
+      <div className="relative w-20 h-20 mx-auto mb-6">
+        <div className="absolute inset-0 border-4 border-emerald-900/30 rounded-full" />
+        <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <div className="absolute inset-4 bg-emerald-500/10 rounded-full blur-sm animate-pulse" />
+      </div>
+      <p className="text-emerald-400 font-medium tracking-widest text-sm uppercase animate-pulse">
+        {label}
+      </p>
+    </div>
+  </div>
+);
+
+// ──────────────────────────────────────────────────────────────
+// SECURITY GUARDS (FIXED)
+// ──────────────────────────────────────────────────────────────
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const [, setLocation] = useLocation(); // Hook #1
   const token = sessionStorage.getItem("token");
 
-  if (!token) return <Redirect to="/login" />;
-
+  // Hook #2 (Moved BEFORE the 'if (!token)' check)
   const { isLoading, isError } = useQuery({
     queryKey: ["/auth/user-info"],
-    enabled: !!token,
     retry: false,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: !!token, // Only run if token exists
   });
 
+  // Now we can safely do conditional returns
+  if (!token) {
+    if (localStorage.getItem("token")) clearAuth();
+    return <Redirect to="/login" />;
+  }
+
   if (isError) {
-    sessionStorage.removeItem("token");
-    localStorage.removeItem("token");
-    localStorage.removeItem("isAdmin"); // cleanup
-    queryClient.clear();
+    clearAuth();
     return <Redirect to="/login" />;
   }
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
-        <div className="text-center relative z-10">
-          <div className="relative w-20 h-20 mx-auto mb-6">
-            <div className="absolute inset-0 border-4 border-emerald-900/30 rounded-full"></div>
-            <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-            <div className="absolute inset-4 bg-emerald-500/10 rounded-full blur-sm animate-pulse"></div>
-          </div>
-          <p className="text-emerald-400 font-medium tracking-widest text-sm uppercase animate-pulse">
-            Loading GAT System...
-          </p>
-        </div>
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
-  return <Component />;
+  return <>{children}</>;
 }
 
-function PublicRoute({ component: Component }: { component: React.ComponentType }) {
-  return isAuthenticated() ? <Redirect to="/dashboard" /> : <Component />;
-}
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const token = sessionStorage.getItem("token");
+  const isAdminStored = sessionStorage.getItem("isAdmin") === "true";
 
-// ──────────────────────────────────────────────────────────────
-// ADMIN GUARD
-// ──────────────────────────────────────────────────────────────
-function AdminGuard() {
-  if (!isAuthenticated()) {
-    return <Redirect to="/admin-login" />;
-  }
-
-  const isAdmin = sessionStorage.getItem("isAdmin") === "true";
-
-  if (!isAdmin) {
-    return <Redirect to="/dashboard" />;
-  }
-
-  const { isLoading, isError } = useQuery({
+  // Hook #1 (Moved BEFORE logic)
+  const { isLoading, isError, data } = useQuery<UserInfo>({
     queryKey: ["/auth/user-info"],
-    enabled: true,
     retry: false,
+    enabled: !!token, // Only run if token exists
   });
 
-  if (isError) {
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("isAdmin");
-    localStorage.removeItem("token");
-    localStorage.removeItem("isAdmin");
-    queryClient.clear();
+  // Now we can do conditional returns
+  if (!token || !isAdminStored) {
     return <Redirect to="/admin-login" />;
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
-        <div className="text-center relative z-10">
-          <div className="relative w-20 h-20 mx-auto mb-6">
-            <div className="absolute inset-0 border-4 border-emerald-900/30 rounded-full"></div>
-            <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-            <div className="absolute inset-4 bg-emerald-500/10 rounded-full blur-sm animate-pulse"></div>
-          </div>
-          <p className="text-emerald-400 font-medium tracking-widest text-sm uppercase animate-pulse">
-            Loading GAT System...
-          </p>
-        </div>
-      </div>
-    );
+  if (isLoading) return <FullScreenLoader label="Verifying Admin Access..." />;
+
+  // Strict Server Verification
+  if (isError || !data?.isAdmin) {
+    if (isError) clearAuth();
+    return <Redirect to="/admin-login" />;
   }
 
-  return <Admin />;
+  return <>{children}</>;
 }
 
-// ──────────────────────────────────────────────────────────────
-// ROUTER + GLOBAL ADMIN BUTTON HANDLER
-// ──────────────────────────────────────────────────────────────
+function PublicOnly({ children }: { children: React.ReactNode }) {
+  const token = sessionStorage.getItem("token");
+  return token ? <Redirect to="/dashboard" /> : <>{children}</>;
+}
+
 function Router() {
-  const [, setLocation] = useLocation();
-
-  // Expose global function so ANY header button can trigger it
-  useEffect(() => {
-    // @ts-ignore - we're intentionally adding to window
-    window.goToAdmin = () => {
-      if (sessionStorage.getItem("isAdmin") === "true") {
-        setLocation("/admin");
-      } else {
-        setLocation("/admin-login");
-      }
-    };
-
-    // Cleanup on unmount
-    return () => {
-      // @ts-ignore
-      delete window.goToAdmin;
-    };
-  }, [setLocation]);
-
   return (
-    <Switch>
-      <Route path="/" component={LandingPage} />
-      <Route path="/login" component={() => <PublicRoute component={Login} />} />
-      <Route path="/register" component={() => <PublicRoute component={Register} />} />
-      <Route path="/reset-password" component={() => <PublicRoute component={ResetPassword} />} />
+    <Suspense fallback={<FullScreenLoader />}>
+      <Switch>
+        {/* PUBLIC ROUTES */}
+        <Route path="/" component={LandingPage} />
+        
+        <Route path="/login">
+          <PublicOnly><Login /></PublicOnly>
+        </Route>
+        
+        <Route path="/register">
+          <PublicOnly><Register /></PublicOnly>
+        </Route>
+        
+        <Route path="/reset-password">
+          <PublicOnly><ResetPassword /></PublicOnly>
+        </Route>
 
-      {/* Protected User Routes */}
-      <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/arbitrage" component={() => <ProtectedRoute component={Arbitrage} />} />
-      <Route path="/forex" component={() => <ProtectedRoute component={Forex} />} />
-      <Route path="/futures" component={() => <ProtectedRoute component={Futures} />} />
-      <Route path="/wallet" component={() => <ProtectedRoute component={Wallet} />} />
-      <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
-      <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
+        <Route path="/admin-login" component={AdminLogin} />
 
-      {/* ADMIN LOGIN – Accessible even if authenticated (allows re-login as admin) */}
-      <Route path="/admin-login" component={AdminLogin} />
+        {/* PROTECTED ROUTES */}
+        <Route path="/dashboard">
+          <RequireAuth><Dashboard /></RequireAuth>
+        </Route>
+        <Route path="/arbitrage">
+          <RequireAuth><Arbitrage /></RequireAuth>
+        </Route>
+        <Route path="/forex">
+          <RequireAuth><Forex /></RequireAuth>
+        </Route>
+        <Route path="/futures">
+          <RequireAuth><Futures /></RequireAuth>
+        </Route>
+        <Route path="/wallet">
+          <RequireAuth><Wallet /></RequireAuth>
+        </Route>
+        <Route path="/profile">
+          <RequireAuth><Profile /></RequireAuth>
+        </Route>
+        <Route path="/settings">
+          <RequireAuth><Settings /></RequireAuth>
+        </Route>
 
-      {/* ADMIN ROUTE – Uses the Guard component */}
-      <Route path="/admin" component={AdminGuard} />
+        {/* ADMIN ROUTES */}
+        <Route path="/admin">
+          <RequireAdmin><Admin /></RequireAdmin>
+        </Route>
 
-      <Route component={NotFound} />
-    </Switch>
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
-// ──────────────────────────────────────────────────────────────
-// MAIN APP
-// ──────────────────────────────────────────────────────────────
 function App() {
+  // Activate Global Idle Timer
+  useIdleTimer();
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
         <Router />
+        <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   );

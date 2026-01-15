@@ -5,9 +5,10 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
-// Updated to 3 to allow stacking notifications (better for trading alerts)
+// Max 3 toasts at a time to prevent blocking the trading interface
 const TOAST_LIMIT = 3
-const TOAST_REMOVE_DELAY = 1000000
+// 5 seconds default duration (standard for UX)
+const TOAST_REMOVE_DELAY = 5000
 
 type ToasterToast = ToastProps & {
   id: string
@@ -77,6 +78,7 @@ export const reducer = (state: State, action: Action): State => {
     case "ADD_TOAST":
       return {
         ...state,
+        // Add new toast to the front, limit total number
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
       }
 
@@ -91,8 +93,7 @@ export const reducer = (state: State, action: Action): State => {
     case "DISMISS_TOAST": {
       const { toastId } = action
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
+      // Side Effect: Schedule removal from DOM
       if (toastId) {
         addToRemoveQueue(toastId)
       } else {

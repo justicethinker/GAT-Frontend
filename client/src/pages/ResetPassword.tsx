@@ -2,52 +2,74 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { resetPasswordSchema, otpResendSchema, type ResetPasswordInput, type OTPResendInput } from "@shared/schema";
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { Eye, EyeOff, Loader2, KeyRound, MailCheck } from "lucide-react";
+
+// --- SCHEMAS ---
+
+// Step 1: Email Only
+const emailSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+});
+
+// Step 2: OTP + New Password + Confirm
+const resetSchema = z.object({
+  otp: z.string().min(6, "OTP must be 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+type EmailInput = z.infer<typeof emailSchema>;
+type ResetInput = z.infer<typeof resetSchema>;
+
+// --- COMPONENT ---
 
 export default function ResetPassword() {
   const [, setLocation] = useLocation();
-  const [isLoading, setIsLoading] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
   const { toast } = useToast();
+  
+  // State
+  const [step, setStep] = useState<1 | 2>(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  
+  // Toggle Visibility
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
-  const {
-    register: registerEmail,
-    handleSubmit: handleSubmitEmail,
-    formState: { errors: emailErrors },
-    getValues,
-  } = useForm<OTPResendInput>({
-    resolver: zodResolver(otpResendSchema),
-  });
+  // Forms
+  const emailForm = useForm<EmailInput>({ resolver: zodResolver(emailSchema) });
+  const resetForm = useForm<ResetInput>({ resolver: zodResolver(resetSchema) });
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setValue,
-  } = useForm<ResetPasswordInput>({
-    resolver: zodResolver(resetPasswordSchema),
-  });
+  // --- HANDLERS ---
 
-  const onSendOTP = async (data: OTPResendInput) => {
+  const onSendOTP = async (data: EmailInput) => {
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/auth/otp-resend", data);
-      setOtpSent(true);
-      setValue("email", data.email);
-      toast({
-        title: "Success",
-        description: "OTP sent to your email!",
+      // POST /auth/otp-resend (or /auth/forgot-password)
+      const res = await fetch("/auth/otp-resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
+
+      if (!res.ok) throw new Error("Failed to send verification code");
+
+      setUserEmail(data.email);
+      setStep(2);
+      toast({ title: "Code Sent", description: "Check your email inbox." });
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to send OTP",
+        description: error.message || "Could not send OTP",
         variant: "destructive",
       });
     } finally {
@@ -55,19 +77,37 @@ export default function ResetPassword() {
     }
   };
 
-  const onSubmit = async (data: ResetPasswordInput) => {
+  const onResetSubmit = async (data: ResetInput) => {
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/auth/reset-password", data);
+      // POST /auth/reset-password
+      const res = await fetch("/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email: userEmail, 
+          otp: data.otp, 
+          newPassword: data.password 
+        }),
+      });
+
+      const responseBody = await res.json();
+
+      if (!res.ok) {
+        throw new Error(responseBody.detail || "Failed to reset password");
+      }
+
       toast({
         title: "Success",
-        description: "Password reset successfully! Please sign in.",
+        description: "Password reset! You can now login.",
+        className: "bg-emerald-600 text-white border-emerald-700",
       });
+      
       setLocation("/login");
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to reset password",
+        title: "Reset Failed",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -75,7 +115,7 @@ export default function ResetPassword() {
     }
   };
 
-  // Shared background elements
+  // Background UI
   const BackgroundEffects = () => (
     <>
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
@@ -83,145 +123,144 @@ export default function ResetPassword() {
     </>
   );
 
-  if (!otpSent) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
-        <BackgroundEffects />
-        <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
-          <CardHeader className="space-y-2 pb-6">
-            <div className="flex items-center justify-center mb-4">
-              <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                <i className="ri-lock-password-line text-emerald-400 text-2xl"></i>
-              </div>
+  return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
+      <BackgroundEffects />
+      
+      <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
+        <CardHeader className="space-y-2 pb-6">
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+              {step === 1 ? (
+                <MailCheck className="text-emerald-400 w-7 h-7" />
+              ) : (
+                <KeyRound className="text-emerald-400 w-7 h-7" />
+              )}
             </div>
-            <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">Reset Password</CardTitle>
-            <CardDescription className="text-center text-gray-400">
-              Enter your email to receive a verification code
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmitEmail(onSendOTP)} className="space-y-5">
+          </div>
+          <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">
+            {step === 1 ? "Reset Password" : "Secure Account"}
+          </CardTitle>
+          <CardDescription className="text-center text-gray-400">
+            {step === 1 
+              ? "Enter your email to receive a verification code" 
+              : `Enter the code sent to ${userEmail}`
+            }
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          {/* STEP 1: REQUEST OTP */}
+          {step === 1 && (
+            <form onSubmit={emailForm.handleSubmit(onSendOTP)} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-gray-300 text-sm font-medium ml-1">
                   Email Address
                 </Label>
                 <Input
                   id="email"
-                  data-testid="input-email"
                   type="email"
                   placeholder="trader@example.com"
-                  className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
-                  {...registerEmail("email")}
+                  className="h-11 bg-gray-800 border-gray-700 text-white focus:border-emerald-500 transition-all"
+                  {...emailForm.register("email")}
                 />
-                {emailErrors.email && (
-                  <p className="text-xs text-red-400 ml-1">{emailErrors.email.message}</p>
+                {emailForm.formState.errors.email && (
+                  <p className="text-xs text-red-400 ml-1">{emailForm.formState.errors.email.message}</p>
                 )}
               </div>
 
               <Button
                 type="submit"
-                data-testid="button-send-otp"
                 disabled={isLoading}
-                className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 active:translate-y-0"
+                className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-lg hover:-translate-y-0.5"
               >
-                {isLoading ? (
-                  <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      <span>Sending Code...</span>
-                  </div>
-                ) : "Send Verification Code"}
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send Verification Code"}
               </Button>
 
               <div className="pt-2 text-center text-sm text-gray-400">
                 Remember your password?{" "}
-                <Link
-                  href="/login"
-                  data-testid="link-login"
-                  className="text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4"
-                >
+                <Link href="/login" className="text-emerald-400 hover:underline">
                   Sign in
                 </Link>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+          )}
 
-  return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
-      <BackgroundEffects />
-      <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
-        <CardHeader className="space-y-2 pb-6">
-          <div className="flex items-center justify-center mb-4">
-             <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-              <i className="ri-shield-keyhole-line text-emerald-400 text-2xl"></i>
-            </div>
-          </div>
-          <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">Verify & Reset</CardTitle>
-          <CardDescription className="text-center text-gray-400">
-            Check your email for the code
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="otp" className="text-gray-300 text-sm font-medium ml-1">
-                Verification Code
-              </Label>
-              <Input
-                id="otp"
-                data-testid="input-otp"
-                type="text"
-                placeholder="Enter 6-digit code"
-                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all tracking-widest text-center font-mono text-lg"
-                {...register("otp")}
-              />
-              {errors.otp && (
-                <p className="text-xs text-red-400 ml-1">{errors.otp.message}</p>
-              )}
-            </div>
+          {/* STEP 2: VERIFY & CHANGE */}
+          {step === 2 && (
+            <form onSubmit={resetForm.handleSubmit(onResetSubmit)} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="otp" className="text-gray-300 text-sm font-medium ml-1">
+                  Verification Code (OTP)
+                </Label>
+                <Input
+                  id="otp"
+                  type="text"
+                  placeholder="123456"
+                  inputMode="numeric"
+                  className="h-11 bg-gray-800 border-gray-700 text-white text-center font-mono text-lg tracking-widest focus:border-emerald-500 transition-all"
+                  {...resetForm.register("otp")}
+                />
+                {resetForm.formState.errors.otp && (
+                  <p className="text-xs text-red-400 ml-1">{resetForm.formState.errors.otp.message}</p>
+                )}
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-300 text-sm font-medium ml-1">
-                New Password
-              </Label>
-              <Input
-                id="password"
-                data-testid="input-password"
-                type="password"
-                placeholder="••••••••"
-                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
-                {...register("password")}
-              />
-              {errors.password && (
-                <p className="text-xs text-red-400 ml-1">{errors.password.message}</p>
-              )}
-            </div>
-
-            <Button
-              type="submit"
-              data-testid="button-submit"
-              disabled={isLoading}
-              className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 active:translate-y-0"
-            >
-               {isLoading ? (
-                <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Resetting...</span>
+              <div className="space-y-2">
+                <Label htmlFor="pass" className="text-gray-300 text-sm font-medium ml-1">New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="pass"
+                    type={showPassword ? "text" : "password"}
+                    className="h-11 bg-gray-800 border-gray-700 text-white pr-10 focus:border-emerald-500"
+                    placeholder="••••••••"
+                    {...resetForm.register("password")}
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 hover:text-white">
+                    {showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                  </button>
                 </div>
-              ) : "Reset Password"}
-            </Button>
+                {resetForm.formState.errors.password && (
+                  <p className="text-xs text-red-400 ml-1">{resetForm.formState.errors.password.message}</p>
+                )}
+              </div>
 
-            <button
-              type="button"
-              onClick={() => setOtpSent(false)}
-              className="w-full text-sm text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4 pt-2"
-            >
-              Use a different email
-            </button>
-          </form>
+              <div className="space-y-2">
+                <Label htmlFor="conf" className="text-gray-300 text-sm font-medium ml-1">Confirm Password</Label>
+                <div className="relative">
+                  <Input
+                    id="conf"
+                    type={showConfirm ? "text" : "password"}
+                    className="h-11 bg-gray-800 border-gray-700 text-white pr-10 focus:border-emerald-500"
+                    placeholder="••••••••"
+                    {...resetForm.register("confirmPassword")}
+                  />
+                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-3 text-gray-400 hover:text-white">
+                    {showConfirm ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                  </button>
+                </div>
+                {resetForm.formState.errors.confirmPassword && (
+                  <p className="text-xs text-red-400 ml-1">{resetForm.formState.errors.confirmPassword.message}</p>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-lg hover:-translate-y-0.5"
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reset Password"}
+              </Button>
+
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="w-full text-sm text-emerald-400 hover:underline pt-2"
+              >
+                Change email address
+              </button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>

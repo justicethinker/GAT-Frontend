@@ -3,8 +3,18 @@ import { createServer } from "http";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import cors from "cors";
+import helmet from "helmet";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
 
 const app = express();
+
+// ──────────────────────────────────────────────────────────────
+// 1. CRITICAL FIX: TRUST PROXY (Required for Codespaces/Render)
+// ──────────────────────────────────────────────────────────────
+// This fixes the "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR" error.
+// We trust the load balancer/proxy that sits in front of the app.
+app.set('trust proxy', 1);
 
 // Extend IncomingMessage to support rawBody
 declare module 'http' {
@@ -13,25 +23,56 @@ declare module 'http' {
   }
 }
 
-// 1. Security & Parsing Middleware
-// CRITICAL FIX: Set origin to "*" or your specific frontend URL. 
-// "false" blocks all cross-origin requests in production, which breaks your frontend connection.
+// ──────────────────────────────────────────────────────────────
+// 2. SECURITY & PERFORMANCE
+// ──────────────────────────────────────────────────────────────
+
+// A. Security Headers
+// CRITICAL FIX: We disable Content Security Policy (CSP) completely for now.
+// The previous errors showed CSP was blocking Google Fonts and Inline Styles.
+app.use(helmet({
+  contentSecurityPolicy: false, 
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+}));
+
+// B. Compression
+app.use(compression());
+
+// C. CORS
 app.use(cors({
-  origin: "*", 
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  origin: true, // Allow any origin in development/codespaces
   credentials: true
 }));
 
-// Parse JSON and Raw Body
+// D. Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true, 
+  legacyHeaders: false,
+  // Fix for proxy environments: disable strict IP checking validation if needed
+  validate: { xForwardedForHeader: false } 
+});
+
+app.use("/api", limiter);
+app.use("/auth", limiter);
+
+// ──────────────────────────────────────────────────────────────
+// 3. PARSING
+// ──────────────────────────────────────────────────────────────
+
 app.use(express.json({
+  limit: '10mb', 
   verify: (req, _res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 2. Logging Middleware
+// ──────────────────────────────────────────────────────────────
+// 4. LOGGING
+// ──────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -45,7 +86,7 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api") || path.startsWith("/auth") || path.startsWith("/dash") || path.startsWith("/admini")) {
+    if (path.startsWith("/api") || path.startsWith("/auth") || path.startsWith("/dash")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
@@ -60,21 +101,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// ──────────────────────────────────────────────────────────────
+// 5. SERVER SETUP
+// ──────────────────────────────────────────────────────────────
+
 (async () => {
-  // 3. Create Server
   const server = createServer(app);
 
-  // 4. Register Routes
-  // This attaches all your /auth, /dash, /arb, /admini endpoints
   await registerRoutes(app);
 
-  // 5. Health Check Endpoint (CRITICAL FOR RENDER)
-  // Render pings this to know your app is alive.
-  app.get('/health', (req, res) => {
+  app.get('/health', (_req, res) => {
     res.status(200).send('OK');
   });
 
-  // 6. Global Error Handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -83,18 +122,16 @@ app.use((req, res, next) => {
     res.status(status).json({ message });
   });
 
-  // 7. Setup Frontend Serving
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // 8. Start Server (Render-Compatible)
-  // Render assigns a dynamic port via process.env.PORT. We must use it.
   const PORT = parseInt(process.env.PORT || "5000", 10);
   
   server.listen(PORT, "0.0.0.0", () => {
     log(`Server running on port ${PORT}`);
+    log(`Proxy Trust: Enabled`);
   });
 })();

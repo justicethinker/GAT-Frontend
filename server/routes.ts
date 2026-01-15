@@ -1,50 +1,69 @@
 import type { Express, Request, Response } from "express";
 import FormData from "form-data";
 import multer from "multer";
+import { z } from "zod";
 
-// Configure multer for handling file uploads in memory
-const upload = multer({ storage: multer.memoryStorage() });
+// ──────────────────────────────────────────────────────────────
+// 1. CONFIGURATION & TYPES
+// ──────────────────────────────────────────────────────────────
 
-const API_BASE_URL = "https://gat-zm1r.onrender.com";
-const ADMIN_ID = process.env.ADMIN_ID ?? "tradeproadmin2025";
+// In-memory storage for file uploads (Production note: Consider S3/Disk for files >10MB)
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // Limit: 5MB
+});
+
+const API_BASE_URL = process.env.BACKEND_URL || "https://gat-zm1r.onrender.com";
+const ADMIN_ID = process.env.ADMIN_ID || "tradeproadmin2025";
+const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
+
+interface ProxyResult {
+  status: number;
+  ok: boolean;
+  data: any;
+}
+
+// ──────────────────────────────────────────────────────────────
+// 2. UTILITY FUNCTIONS
+// ──────────────────────────────────────────────────────────────
 
 /**
  * Robust Proxy Request Handler
- * Supports: JSON, URLSearchParams (x-www-form-urlencoded), and FormData (multipart)
+ * - Handles JSON, URLEncoded, and FormData
+ * - Implements timeouts
+ * - Normalizes errors
  */
 async function proxyRequest(
   url: string,
   method: string,
   body?: any,
-  headers?: Record<string, string>
-) {
+  headers: Record<string, string> = {}
+): Promise<ProxyResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     const options: RequestInit = {
       method,
       headers: { ...headers },
+      signal: controller.signal,
     };
 
-    // BODY HANDLING
+    // Body Handling Logic
     if (body && method !== "GET" && method !== "HEAD") {
       if (body instanceof URLSearchParams) {
-        // Handle x-www-form-urlencoded (e.g., Login)
         options.headers = {
           "Content-Type": "application/x-www-form-urlencoded",
           ...headers,
         };
         options.body = body.toString();
       } else if (body instanceof FormData) {
-        // Handle multipart/form-data (e.g., Deposits)
-        // Note: When using 'form-data' lib, let it set the boundary header automatically
-        // We merge other headers but EXCLUDE Content-Type to allow boundary generation
+        // FormData (multipart)
         const formHeaders = body.getHeaders();
-        options.headers = {
-          ...headers,
-          ...formHeaders,
-        };
-        options.body = body as any; // Cast to any to satisfy fetch types compatible with Node streams
+        options.headers = { ...headers, ...formHeaders };
+        options.body = body as any;
       } else {
-        // Default to JSON
+        // JSON
         options.headers = {
           "Content-Type": "application/json",
           ...headers,
@@ -54,30 +73,48 @@ async function proxyRequest(
     }
 
     const response = await fetch(`${API_BASE_URL}${url}`, options);
-    const contentType = response.headers.get("content-type");
+    clearTimeout(timeoutId);
 
+    const contentType = response.headers.get("content-type");
     let data;
+
+    // Gracefully handle non-JSON responses (like 502 Bad Gateway HTML)
     if (contentType && contentType.includes("application/json")) {
       data = await response.json();
     } else {
-      data = await response.text();
+      const text = await response.text();
+      // Try parsing anyway just in case header is wrong, else return text
+      try { data = JSON.parse(text); } catch { data = { message: text }; }
     }
 
-    // Pass through failure details from backend even if status is 4xx/5xx
     return {
       status: response.status,
       ok: response.ok,
       data,
     };
   } catch (error: any) {
-    console.error(`[Proxy Error] ${method} ${url}:`, error);
-    throw error;
+    clearTimeout(timeoutId);
+    
+    // Handle Timeouts specifically
+    if (error.name === 'AbortError') {
+      return { status: 504, ok: false, data: { detail: "Upstream Request Timeout" } };
+    }
+
+    console.error(`[Proxy Error] ${method} ${url}:`, error.message);
+    return { status: 502, ok: false, data: { detail: "Upstream Service Unavailable" } };
   }
 }
 
 /**
- * Helper to correctly serialize query params, especially arrays for FastAPI
- * e.g., converts { a: [1, 2] } to "a=1&a=2" instead of "a=1,2"
+ * Extracts and sanitizes the Authorization header
+ */
+function getAuthHeader(req: Request): Record<string, string> {
+  const token = req.headers.authorization;
+  return token ? { Authorization: token } : {};
+}
+
+/**
+ * Validates query params for Arrays (FastAPI specific)
  */
 function buildQueryString(query: any): string {
   const params = new URLSearchParams();
@@ -92,338 +129,189 @@ function buildQueryString(query: any): string {
   return str ? `?${str}` : "";
 }
 
+// ──────────────────────────────────────────────────────────────
+// 3. ROUTE REGISTRATION
+// ──────────────────────────────────────────────────────────────
+
 export async function registerRoutes(app: Express): Promise<Express> {
 
-  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-  // AUTH ROUTES
-  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  // --- AUTH VALIDATION SCHEMAS ---
+  const LoginSchema = z.object({
+    email: z.string().email(),
+    password: z.string().min(1),
+    adminId: z.string().optional(),
+    scope: z.string().optional(),
+    client_id: z.string().optional(),
+  });
 
-  // POST /auth/token (Login)
-  // Backend expects: application/x-www-form-urlencoded
-  app.post("/auth/token", async (req: Request, res: Response) => {
+  // [POST] Login
+  app.post("/auth/token", async (req, res) => {
     try {
-      const { email, password, adminId } = req.body;
-
-      if (!email || !password) {
-        return res.status(400).json({ detail: "Missing email or password" });
+      // 1. Validate Input
+      const parse = LoginSchema.safeParse(req.body);
+      if (!parse.success) {
+        return res.status(400).json({ detail: "Invalid input", errors: parse.error.format() });
       }
 
+      const { email, password, adminId, scope, client_id } = parse.data;
+
+      // 2. Transform to URLSearchParams (Backend Requirement)
       const formData = new URLSearchParams();
       formData.append("email", email);
       formData.append("password", password);
-      // Optional fields from docs: scope, client_id, client_secret
-      if (req.body.scope) formData.append("scope", req.body.scope);
-      if (req.body.client_id) formData.append("client_id", req.body.client_id);
+      if (scope) formData.append("scope", scope);
+      if (client_id) formData.append("client_id", client_id);
 
+      // 3. Proxy
       const result = await proxyRequest("/auth/token", "POST", formData);
 
       if (result.ok) {
-        const responseData: any = { ...result.data };
+        const responseData = { ...result.data };
         
-        // Use backend role if available, fallback to adminId check
-        if (responseData.user_role === "admin" || (adminId && adminId === ADMIN_ID)) {
-          responseData.isAdmin = true;
-        } else {
-          responseData.isAdmin = false;
-        }
+        // Admin Logic Injection
+        const isBackendAdmin = responseData.user_role === "admin";
+        const isSuperAdmin = adminId === ADMIN_ID;
+        responseData.isAdmin = isBackendAdmin || isSuperAdmin;
+        
         res.json(responseData);
       } else {
         res.status(result.status).json(result.data);
       }
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ detail: "Internal Server Error" });
     }
   });
 
-  // POST /auth/create-user
-  app.post("/auth/create-user", async (req, res) => {
-    try {
-      const result = await proxyRequest("/auth/create-user", "POST", req.body);
+  // [POST] Generic Auth Routes
+  const authRoutes = ["/auth/create-user", "/auth/otp-resend", "/auth/reset-password"];
+  authRoutes.forEach((route) => {
+    app.post(route, async (req, res) => {
+      const result = await proxyRequest(route, "POST", req.body);
       res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    });
   });
 
-  // POST /auth/otp-resend
-  app.post("/auth/otp-resend", async (req, res) => {
-    try {
-      const result = await proxyRequest("/auth/otp-resend", "POST", req.body);
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // POST /auth/reset-password
-  app.post("/auth/reset-password", async (req, res) => {
-    try {
-      const result = await proxyRequest("/auth/reset-password", "POST", req.body);
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // GET /auth/user-info
+  // [GET] User Info
   app.get("/auth/user-info", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/auth/user-info", "GET", undefined, {
-        Authorization: authHeader || "",
-      });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    const result = await proxyRequest("/auth/user-info", "GET", undefined, getAuthHeader(req));
+    res.status(result.status).json(result.data);
   });
 
-  // Helper for admin verification (Client logic)
+  // [POST] Client-Side Admin Check
   app.post("/auth/verify-admin-id", (req, res) => {
     const { adminId } = req.body;
-    if (adminId && adminId === ADMIN_ID) {
-      res.json({ isAdmin: true });
-    } else {
-      res.json({ isAdmin: false });
-    }
+    // Use constant time comparison if crypto module available, otherwise strict equality
+    res.json({ isAdmin: adminId === ADMIN_ID });
   });
 
+  // --- DASHBOARD ROUTES ---
 
-  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-  // DASHBOARD ROUTES
-  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-
-  // POST /dash/transfer
+  // [POST] Transfer
   app.post("/dash/transfer", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/dash/transfer", "POST", req.body, { 
-        Authorization: authHeader || "" 
-      });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    const result = await proxyRequest("/dash/transfer", "POST", req.body, getAuthHeader(req));
+    res.status(result.status).json(result.data);
   });
 
-  // GET /dash/notification
-  app.get("/dash/notification", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const url = `/dash/notification${buildQueryString(req.query)}`;
-      const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
+  // [GET] Generic Dash Routes
+  const dashGetRoutes = ["/dash/notification", "/dash/recent-trades", "/dash/deposits", "/dash/withdrawals"];
+  dashGetRoutes.forEach(path => {
+    app.get(path, async (req, res) => {
+      const url = `${path}${buildQueryString(req.query)}`;
+      const result = await proxyRequest(url, "GET", undefined, getAuthHeader(req));
       res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    });
   });
 
-  // GET /dash/recent-trades
-  // Query: status (PENDING, COMPLETED, ACTIVE)
-  app.get("/dash/recent-trades", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const url = `/dash/recent-trades${buildQueryString(req.query)}`;
-      const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // GET /dash/deposits
-  app.get("/dash/deposits", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/dash/deposits", "GET", undefined, { Authorization: authHeader || "" });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // POST /dash/deposits (Multipart/Form-Data)
-  // Uses 'multer' to intercept the file, then reconstructs FormData for the backend
+  // [POST] Deposit (Multipart/Form-Data)
   app.post("/dash/deposits", upload.single("receipt"), async (req: any, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ detail: "Receipt file is required" });
+    }
+
     try {
-      const authHeader = req.headers.authorization;
-
-      if (!req.file) {
-        return res.status(400).json({ detail: "Receipt file is required" });
-      }
-
-      // Reconstruct FormData for the external API
       const form = new FormData();
-      form.append("currency", req.body.currency);
-      form.append("amount", req.body.amount);
+      form.append("currency", req.body.currency || "USD");
+      form.append("amount", req.body.amount || "0");
       form.append("receipt", req.file.buffer, {
         filename: req.file.originalname,
         contentType: req.file.mimetype,
       });
 
-      const result = await proxyRequest("/dash/deposits", "POST", form, { 
-        Authorization: authHeader || "" 
-      });
-      
+      const result = await proxyRequest("/dash/deposits", "POST", form, getAuthHeader(req));
       res.status(result.status).json(result.data);
-    } catch (error: any) {
-      console.error("Deposit Error:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      res.status(500).json({ detail: "Failed to process file upload" });
     }
   });
 
-  // GET /dash/withdrawals
-  app.get("/dash/withdrawals", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/dash/withdrawals", "GET", undefined, { Authorization: authHeader || "" });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // POST /dash/withdrawals
+  // [POST] Withdrawals
   app.post("/dash/withdrawals", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/dash/withdrawals", "POST", req.body, { Authorization: authHeader || "" });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    const result = await proxyRequest("/dash/withdrawals", "POST", req.body, getAuthHeader(req));
+    res.status(result.status).json(result.data);
   });
 
-  // GET /dash/transactions/:tx_type/:tx_id
+  // [GET] Transaction Details
   app.get("/dash/transactions/:tx_type/:tx_id", async (req, res) => {
-    try {
-      const { tx_type, tx_id } = req.params;
-      const authHeader = req.headers.authorization;
-      
-      // Validation to match Enum in docs
-      if (!['deposit', 'withdraw'].includes(tx_type)) {
-         return res.status(400).json({ detail: "Invalid transaction type" });
-      }
-
-      const result = await proxyRequest(`/dash/transactions/${tx_type}/${tx_id}`, "GET", undefined, { 
-        Authorization: authHeader || "" 
-      });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    const { tx_type, tx_id } = req.params;
+    if (!['deposit', 'withdraw'].includes(tx_type)) {
+       return res.status(400).json({ detail: "Invalid transaction type" });
     }
+    const result = await proxyRequest(`/dash/transactions/${tx_type}/${tx_id}`, "GET", undefined, getAuthHeader(req));
+    res.status(result.status).json(result.data);
   });
 
+  // --- ARBITRAGE ROUTES ---
 
-  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-  // ARBITRAGE ROUTES
-  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-
-  app.get("/arb/arbitrage-exc", async (req, res) => {
-    try {
-      const result = await proxyRequest("/arb/arbitrage-exc", "GET");
+  // [GET] Public Arb Routes
+  const arbPublicRoutes = ["/arb/arbitrage-exc", "/arb/arbitrage-symbol"];
+  arbPublicRoutes.forEach(path => {
+    app.get(path, async (req, res) => {
+      const result = await proxyRequest(path, "GET");
       res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    });
   });
 
-  app.get("/arb/arbitrage-symbol", async (req, res) => {
-    try {
-      const result = await proxyRequest("/arb/arbitrage-symbol", "GET");
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // GET /arb/opportunity-scanner
-  // Query: exchanges (array), symbols (array), min_profit
+  // [GET] Scanner
   app.get("/arb/opportunity-scanner", async (req, res) => {
-    try {
-      // Use helper to ensure arrays are formatted correctly (e.g. ?exchanges=A&exchanges=B)
-      const url = `/arb/opportunity-scanner${buildQueryString(req.query)}`;
-      const result = await proxyRequest(url, "GET");
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    const url = `/arb/opportunity-scanner${buildQueryString(req.query)}`;
+    const result = await proxyRequest(url, "GET");
+    res.status(result.status).json(result.data);
   });
 
+  // [POST] Perform Trade
   app.post("/arb/perform-arb-trade", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/arb/perform-arb-trade", "POST", req.body, { 
-        Authorization: authHeader || "" 
-      });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    const result = await proxyRequest("/arb/perform-arb-trade", "POST", req.body, getAuthHeader(req));
+    res.status(result.status).json(result.data);
   });
 
+  // [GET] User Arb History
   app.get("/arb/user-arb", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const result = await proxyRequest("/arb/user-arb", "GET", undefined, { 
-        Authorization: authHeader || "" 
-      });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    const result = await proxyRequest("/arb/user-arb", "GET", undefined, getAuthHeader(req));
+    res.status(result.status).json(result.data);
   });
 
+  // --- ADMIN ROUTES ---
 
-  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-  // ADMIN ROUTES
-  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  const adminGetRoutes = [
+    "/admini/dashboard", 
+    "/admini/view-user", 
+    "/admini/suspend-user"
+  ];
 
-  app.get("/admini/dashboard", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const url = `/admini/dashboard${buildQueryString(req.query)}`;
-      const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
+  adminGetRoutes.forEach(path => {
+    app.get(path, async (req, res) => {
+      const url = `${path}${buildQueryString(req.query)}`;
+      const result = await proxyRequest(url, "GET", undefined, getAuthHeader(req));
       res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    });
   });
 
-  app.get("/admini/view-user", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const url = `/admini/view-user${buildQueryString(req.query)}`;
-      const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
+  // [PATCH] Edit User
   app.patch("/admini/edit-user", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      // Extract user_id for the query string, keep body for the payload
-      const queryParams = { user_id: req.query.user_id };
-      const url = `/admini/edit-user${buildQueryString(queryParams)}`;
-      
-      const result = await proxyRequest(url, "PATCH", req.body, { Authorization: authHeader || "" });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/admini/suspend-user", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      const url = `/admini/suspend-user${buildQueryString(req.query)}`;
-      const result = await proxyRequest(url, "GET", undefined, { Authorization: authHeader || "" });
-      res.status(result.status).json(result.data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    const queryParams = { user_id: req.query.user_id };
+    const url = `/admini/edit-user${buildQueryString(queryParams)}`;
+    const result = await proxyRequest(url, "PATCH", req.body, getAuthHeader(req));
+    res.status(result.status).json(result.data);
   });
 
   return app;

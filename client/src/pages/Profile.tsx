@@ -1,59 +1,182 @@
-// src/pages/Profile.tsx
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, MapPin, Link2, Edit3, Check, Wallet, TrendingUp, Activity, Trophy, Mail } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { 
+  Camera, MapPin, Link2, Edit3, Check, X, 
+  Wallet, TrendingUp, Activity, Trophy, Mail, Loader2 
+} from 'lucide-react';
 import { Header } from '@/components/Header';
+import { cn } from '@/lib/utils';
+import { useToast } from "@/hooks/use-toast";
 
-const uploadAvatar = async (file: File) => {
-  const form = new FormData();
-  form.append('avatar', file);
-  const res = await fetch('/auth/avatar', { method: 'POST', body: form });
-  if (!res.ok) throw new Error('Upload failed');
-  const data = await res.json();
-  return data.avatarUrl || data.avatar || '';
-};
+// --- TYPES ---
+interface UserProfile {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  bio: string;
+  location: string;
+  website: string;
+  avatar: string;
+}
 
-const updateProfile = async (updates: any) => {
-  const res = await fetch('/auth/user-info', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
+interface TradingStats {
+  totalBalance: string;
+  todayPnL: string;
+  todayPnLPercent: string;
+  activeTrades: number;
+  newTrades: number;
+  winRate: string;
+  winRateValue: number;
+}
+
+// --- SCHEMA ---
+const profileSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  location: z.string().optional(),
+  website: z.string().url("Invalid URL").optional().or(z.literal("")),
+  bio: z.string().max(160, "Bio must be less than 160 characters").optional(),
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
+
+// --- FETCHERS ---
+const authenticatedFetcher = async ({ queryKey }: { queryKey: string[] }) => {
+  const [path] = queryKey;
+  const token = sessionStorage.getItem("token");
+  const res = await fetch(path, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   });
-  if (!res.ok) throw new Error('Update failed');
+  if (!res.ok) throw new Error("Failed to fetch data");
   return res.json();
 };
 
+// --- COMPONENTS ---
+
+const StatCard = ({ label, value, subValue, icon: Icon, colorClass }: any) => (
+  <div className={cn(
+    "relative overflow-hidden rounded-2xl p-6 border transition-all duration-300 hover:shadow-lg group bg-slate-900/50 backdrop-blur-sm",
+    colorClass
+  )}>
+    <div className="flex justify-between items-start z-10 relative">
+      <div>
+        <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">{label}</p>
+        <h3 className="text-3xl font-bold text-white mt-2">{value}</h3>
+        {subValue && <div className="mt-2">{subValue}</div>}
+      </div>
+      <div className="p-3 bg-white/5 rounded-xl border border-white/5 group-hover:scale-110 transition-transform">
+        <Icon className="w-6 h-6 text-white/80" />
+      </div>
+    </div>
+  </div>
+);
+
+const ProfileSkeleton = () => (
+  <div className="w-full max-w-6xl mx-auto px-4 py-8 animate-pulse">
+    <div className="h-48 bg-slate-800 rounded-t-3xl w-full mb-20 relative">
+        <div className="absolute -bottom-16 left-8 w-32 h-32 bg-slate-700 rounded-full border-4 border-slate-900"></div>
+    </div>
+    <div className="space-y-4 max-w-lg mx-auto text-center mt-20">
+      <div className="h-8 w-48 bg-slate-800 rounded mx-auto" />
+      <div className="h-4 w-32 bg-slate-800 rounded mx-auto" />
+    </div>
+  </div>
+);
+
 export default function Profile() {
   const queryClient = useQueryClient();
-  const { data: user } = useQuery({ queryKey: ['/auth/user-info'] });
-  const { data: stats = {} } = useQuery({ queryKey: ['/dash/stats'] });
-
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', username: '', bio: '', location: '', website: '' });
 
-  const updateMutation = useMutation({
-    mutationFn: updateProfile,
-    onSuccess: (data) => {
-      queryClient.setQueryData(['/auth/user-info'], data);
-      setIsEditing(false);
-      setAvatarFile(null);
+  // 1. Data Fetching
+  const { data: user, isLoading: isUserLoading } = useQuery<UserProfile>({
+    queryKey: ['/auth/user-info'],
+    queryFn: authenticatedFetcher,
+  });
+
+  const { data: stats, isLoading: isStatsLoading } = useQuery<TradingStats>({
+    queryKey: ['/dash/stats'], // Assuming you create this endpoint or mock it
+    queryFn: async () => {
+        // Mock stats for now until backend is ready
+        return {
+            totalBalance: "$12,450.00",
+            todayPnL: "+$320.00",
+            todayPnLPercent: "2.4%",
+            activeTrades: 5,
+            newTrades: 2,
+            winRate: "68%",
+            winRateValue: 68
+        };
     },
   });
 
+  // 2. Form Setup
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: { name: '', bio: '', location: '', website: '' }
+  });
+
+  // 3. Sync Form
   useEffect(() => {
     if (user) {
-      setFormData({
+      reset({
         name: user.name || '',
-        username: user.username || '',
         bio: user.bio || '',
         location: user.location || '',
         website: user.website || '',
       });
-      setAvatarPreview(user.avatar || null);
     }
-  }, [user]);
+  }, [user, reset]);
+
+  // 4. Mutations
+  const mutation = useMutation({
+    mutationFn: async (values: ProfileFormValues) => {
+      const token = sessionStorage.getItem("token");
+      
+      // 1. Upload Avatar if changed
+      let avatarUrl = user?.avatar;
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append('avatar', avatarFile);
+        const uploadRes = await fetch('/auth/avatar', { 
+            method: 'POST', 
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData 
+        });
+        if (uploadRes.ok) {
+            const data = await uploadRes.json();
+            avatarUrl = data.avatarUrl;
+        }
+      }
+
+      // 2. Update Profile Data
+      const res = await fetch('/auth/user-info', {
+        method: 'PATCH',
+        headers: { 
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ ...values, avatar: avatarUrl }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to update profile');
+      return res.json();
+    },
+    onSuccess: (updatedUser) => {
+      queryClient.setQueryData(['/auth/user-info'], updatedUser);
+      setIsEditing(false);
+      setAvatarFile(null);
+      toast({ title: "Success", description: "Profile updated successfully." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update profile.", variant: "destructive" });
+    }
+  });
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,224 +186,205 @@ export default function Profile() {
     }
   };
 
-  const handleSave = async () => {
-    let avatarUrl = user?.avatar;
-    if (avatarFile) avatarUrl = await uploadAvatar(avatarFile);
-    updateMutation.mutate({ ...formData, avatar: avatarUrl });
+  const onCancel = () => {
+    setIsEditing(false);
+    setAvatarFile(null);
+    setAvatarPreview(null);
+    reset();
   };
 
-  if (!user) return null;
+  if (isUserLoading || isStatsLoading) return <div className="min-h-screen bg-slate-950"><Header /><ProfileSkeleton /></div>;
+  if (!user) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400">Error loading profile.</div>;
 
-  const realStats = {
-    balance: stats?.totalBalance || '$124,567.89',
-    todayPnL: stats?.todayPnL || '+$2,847.32',
-    todayPnLPercent: stats?.todayPnLPercent || '8.2%',
-    activeTrades: stats?.activeTrades || 23,
-    newToday: stats?.newTrades || 3,
-    winRate: stats?.winRate || '78.5%',
+  const displayStats = stats || {
+    totalBalance: '$0.00', todayPnL: '$0.00', todayPnLPercent: '0%', 
+    activeTrades: 0, newTrades: 0, winRate: '0%', winRateValue: 0
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-teal-500/30">
       <Header />
 
       <div className="w-full max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         
-        {/* Profile Header Card */}
-        <div className="bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-800 overflow-hidden mb-12">
+        {/* Profile Card */}
+        <div className="relative bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl mb-12 group/card">
           
           {/* Banner */}
-          <div className="h-32 sm:h-48 bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-700" />
-          
-          <div className="relative px-4 pb-10 sm:px-8">
-            
-            {/* Avatar - Centered on Mobile, Left on Desktop */}
-            <div className="absolute -top-16 left-1/2 -translate-x-1/2 sm:-top-20 sm:left-8 sm:translate-x-0 z-10">
-              <div className="relative group">
-                <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full ring-8 ring-slate-950 overflow-hidden bg-slate-800 border-4 border-slate-950 shadow-2xl">
+          <div className="h-40 sm:h-52 w-full bg-gradient-to-r from-teal-900 via-slate-900 to-blue-900 relative overflow-hidden">
+             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20" />
+             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+          </div>
+
+          <div className="px-6 pb-8 sm:px-10">
+            <div className="flex flex-col sm:flex-row items-start">
+              
+              {/* Avatar Section */}
+              <div className="relative -mt-20 mb-6 sm:mb-0 sm:mr-8 flex-shrink-0 z-10 mx-auto sm:mx-0">
+                <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-slate-900 bg-slate-800 shadow-xl overflow-hidden group/avatar">
                   <img
-                    src={avatarPreview || user.avatar || '/default-avatar.png'}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
+                    src={avatarPreview || user.avatar || 'https://github.com/shadcn.png'}
+                    alt={user.name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                   />
+                  
+                  {isEditing && (
+                    <label className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-200">
+                      <Camera className="w-8 h-8 text-white mb-1" />
+                      <span className="text-xs font-medium text-white">Change</span>
+                      <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+                    </label>
+                  )}
                 </div>
-
-                {isEditing && (
-                  <label className="absolute inset-0 bg-black/70 flex items-center justify-center cursor-pointer rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    <Camera className="w-8 h-8 sm:w-10 sm:h-10" />
-                    <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
-                  </label>
-                )}
-
-                {!isEditing && (
-                  <div className="absolute bottom-0 right-0 w-10 h-10 sm:w-12 sm:h-12 bg-teal-500 rounded-full border-4 border-slate-950 flex items-center justify-center shadow-lg">
-                    <Trophy className="w-5 h-5 sm:w-7 sm:h-7 text-yellow-400" />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Action Buttons - Pushed down on mobile to clear avatar */}
-            <div className="flex justify-center sm:justify-end pt-20 sm:pt-6 gap-3">
-              {isEditing ? (
-                <>
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 sm:px-6 sm:py-3 text-sm sm:text-base border border-slate-700 rounded-xl hover:bg-slate-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={updateMutation.isPending}
-                    className="px-6 py-2 sm:px-8 sm:py-3 text-sm sm:text-base bg-teal-600 hover:bg-teal-500 rounded-xl font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
-                  >
-                    <Check className="w-4 h-4 sm:w-5 sm:h-5" />
-                    {updateMutation.isPending ? 'Saving...' : 'Save'}
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-6 py-2 sm:px-8 sm:py-3 text-sm sm:text-base border border-slate-700 rounded-xl hover:bg-slate-800 flex items-center gap-2 font-medium transition-colors"
-                >
-                  <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
-                  Edit Profile
-                </button>
-              )}
-            </div>
-
-            {/* Profile Info */}
-            <div className="mt-6 sm:mt-8 sm:ml-52 lg:ml-56 text-center sm:text-left">
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-                {isEditing ? (
-                  <input
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="bg-transparent border-b-2 border-teal-500 focus:outline-none text-center sm:text-left w-full max-w-[300px] sm:max-w-md"
-                    autoFocus
-                    placeholder="Your Name"
-                  />
-                ) : (
-                  user.name || 'User'
-                )}
-              </h1>
-
-              <p className="text-xl sm:text-2xl text-teal-400 font-light mt-1">@{user.username || 'username'}</p>
-
-              <div className="mt-6 text-base sm:text-lg text-gray-300 max-w-2xl leading-relaxed mx-auto sm:mx-0">
-                {isEditing ? (
-                  <textarea
-                    value={formData.bio}
-                    onChange={(e) => setFormData({...formData, bio: e.target.value})}
-                    rows={3}
-                    placeholder="Tell us about yourself..."
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl focus:border-teal-500 resize-none outline-none"
-                  />
-                ) : (
-                  <p>{user.bio || 'This trader prefers to stay mysterious...'}</p>
-                )}
               </div>
 
-              <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-4 sm:gap-6 text-gray-400 text-sm sm:text-base">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-teal-400" />
-                  <span className="truncate max-w-[200px]">{user.email}</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-teal-400" />
-                  <span>
+              {/* Profile Info / Form */}
+              <div className="flex-1 w-full pt-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                  
+                  <div className="w-full">
                     {isEditing ? (
-                      <input
-                        value={formData.location}
-                        onChange={(e) => setFormData({...formData, location: e.target.value})}
-                        className="bg-transparent border-b border-dashed border-gray-600 focus:border-teal-400 outline-none w-32"
-                        placeholder="Location"
-                      />
-                    ) : (
-                      user.location || 'Unknown'
-                    )}
-                  </span>
-                </div>
+                      <form id="profile-form" onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4 max-w-md">
+                        <div>
+                          <input
+                            {...register('name')}
+                            className={cn("w-full bg-slate-800 border rounded-lg px-3 py-2 text-lg font-bold focus:ring-2 focus:ring-teal-500 outline-none transition-all", errors.name ? "border-red-500" : "border-slate-700")}
+                            placeholder="Display Name"
+                          />
+                          {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name.message}</p>}
+                        </div>
+                        
+                        <div>
+                          <textarea
+                            {...register('bio')}
+                            rows={3}
+                            className={cn("w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all resize-none", errors.bio ? "border-red-500" : "border-slate-700")}
+                            placeholder="Tell us about your trading strategy..."
+                          />
+                          {errors.bio && <p className="text-red-400 text-xs mt-1">{errors.bio.message}</p>}
+                        </div>
 
-                <div className="flex items-center gap-2">
-                    <Link2 className="w-4 h-4 sm:w-5 sm:h-5 text-teal-400" />
-                    {isEditing ? (
-                         <input
-                         value={formData.website}
-                         onChange={(e) => setFormData({...formData, website: e.target.value})}
-                         className="bg-transparent border-b border-dashed border-gray-600 focus:border-teal-400 outline-none w-48"
-                         placeholder="https://example.com"
-                       />
+                        <div className="grid grid-cols-2 gap-3">
+                           <input {...register('location')} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none" placeholder="Location" />
+                           <input {...register('website')} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none" placeholder="Website URL" />
+                        </div>
+                      </form>
                     ) : (
-                        user.website ? (
-                            <a href={user.website} target="_blank" rel="noopener noreferrer" className="hover:text-teal-400 transition truncate max-w-[200px]">
+                      <div className="text-center sm:text-left">
+                        <h1 className="text-3xl font-bold text-white">{user.name || 'User'}</h1>
+                        <p className="text-teal-400 font-medium text-lg">@{user.username || 'trader'}</p>
+                        <p className="mt-4 text-slate-300 leading-relaxed max-w-2xl mx-auto sm:mx-0">
+                          {user.bio || "No bio provided."}
+                        </p>
+                        
+                        <div className="mt-6 flex flex-wrap items-center justify-center sm:justify-start gap-y-2 gap-x-6 text-sm text-slate-400">
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-teal-500" />
+                            <span>{user.email}</span>
+                          </div>
+                          {user.location && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-teal-500" />
+                              <span>{user.location}</span>
+                            </div>
+                          )}
+                          {user.website && (
+                            <div className="flex items-center gap-2">
+                              <Link2 className="w-4 h-4 text-teal-500" />
+                              <a href={user.website} target="_blank" rel="noreferrer" className="hover:text-teal-300 transition-colors underline decoration-slate-700 underline-offset-4">
                                 {user.website.replace(/^https?:\/\//, '')}
-                            </a>
-                        ) : 'No website'
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3 w-full sm:w-auto justify-center sm:justify-end">
+                    {isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={onCancel}
+                          disabled={mutation.isPending}
+                          className="px-4 py-2 rounded-xl border border-slate-600 hover:bg-slate-800 text-slate-300 transition-colors flex items-center gap-2 text-sm font-medium"
+                        >
+                          <X className="w-4 h-4" /> Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          form="profile-form"
+                          disabled={mutation.isPending}
+                          className="px-6 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-900/20 transition-all flex items-center gap-2 text-sm font-bold disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                          {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          Save Changes
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white transition-all flex items-center gap-2 text-sm font-medium group"
+                      >
+                        <Edit3 className="w-4 h-4 text-teal-500 group-hover:text-teal-400" />
+                        Edit Profile
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Trading Stats Grid - Single column on mobile */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Total Balance"
+            value={displayStats.totalBalance}
+            icon={Wallet}
+            colorClass="border-teal-500/20 from-teal-500/10 to-transparent hover:border-teal-500/40"
+            subValue={<span className="text-emerald-400 text-sm font-medium">+12.5% vs last month</span>}
+          />
           
-          <div className="bg-gradient-to-br from-teal-600/10 to-cyan-600/10 border border-teal-500/20 rounded-2xl p-5 sm:p-6 hover:border-teal-500/50 transition-all shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-xs sm:text-sm">Total Balance</p>
-                <p className="text-2xl sm:text-4xl font-bold mt-1 sm:mt-2">{realStats.balance}</p>
-                <p className="text-emerald-400 text-base sm:text-xl font-medium mt-2 sm:mt-4">+12.5%</p>
-              </div>
-              <Wallet className="w-10 h-10 sm:w-12 sm:h-12 text-teal-400 opacity-80" />
-            </div>
-          </div>
+          <StatCard
+            label="Today's P&L"
+            value={displayStats.todayPnL}
+            icon={TrendingUp}
+            colorClass="border-emerald-500/20 from-emerald-500/10 to-transparent hover:border-emerald-500/40"
+            subValue={<span className="text-emerald-400 text-sm font-medium">+{displayStats.todayPnLPercent}</span>}
+          />
 
-          <div className="bg-gradient-to-br from-emerald-600/10 to-teal-600/10 border border-emerald-500/20 rounded-2xl p-5 sm:p-6 hover:border-emerald-500/50 transition shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-xs sm:text-sm">Today's P&L</p>
-                <p className="text-2xl sm:text-4xl font-bold mt-1 sm:mt-2 text-emerald-400">{realStats.todayPnL}</p>
-                <p className="text-emerald-400 text-base sm:text-xl font-medium mt-2 sm:mt-4">+{realStats.todayPnLPercent}</p>
-              </div>
-              <TrendingUp className="w-10 h-10 sm:w-12 sm:h-12 text-emerald-400 opacity-80" />
-            </div>
-          </div>
+          <StatCard
+            label="Active Trades"
+            value={displayStats.activeTrades}
+            icon={Activity}
+            colorClass="border-blue-500/20 from-blue-500/10 to-transparent hover:border-blue-500/40"
+            subValue={
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-300">
+                +{displayStats.newTrades} new
+              </span>
+            }
+          />
 
-          <div className="bg-gradient-to-br from-blue-600/10 to-purple-600/10 border border-blue-500/20 rounded-2xl p-5 sm:p-6 hover:border-blue-500/50 transition shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-xs sm:text-sm">Active Trades</p>
-                <p className="text-2xl sm:text-4xl font-bold mt-1 sm:mt-2">{realStats.activeTrades}</p>
-                <span className="inline-block mt-2 sm:mt-4 px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs sm:text-sm font-medium">
-                  +{realStats.newToday} today
-                </span>
+          <StatCard
+            label="Win Rate"
+            value={displayStats.winRate}
+            icon={Trophy}
+            colorClass="border-yellow-500/20 from-yellow-500/10 to-transparent hover:border-yellow-500/40"
+            subValue={
+              <div className="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-yellow-500 to-amber-600 h-full rounded-full" 
+                  style={{ width: `${displayStats.winRateValue}%` }} 
+                />
               </div>
-              <Activity className="w-10 h-10 sm:w-12 sm:h-12 text-blue-400 opacity-80" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-yellow-600/10 to-orange-600/10 border border-yellow-500/20 rounded-2xl p-5 sm:p-6 hover:border-yellow-500/50 transition shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-xs sm:text-sm">Win Rate</p>
-                <p className="text-2xl sm:text-4xl font-bold mt-1 sm:mt-2">{realStats.winRate}</p>
-              </div>
-              <Trophy className="w-10 h-10 sm:w-12 sm:h-12 text-yellow-400 opacity-80" />
-            </div>
-            <div className="mt-4 sm:mt-6 flex items-center gap-2">
-              <div className="w-full bg-gray-700 rounded-full h-1.5 sm:h-2">
-                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 h-1.5 sm:h-2 rounded-full" style={{width: realStats.winRate}} />
-              </div>
-              <span className="text-xs sm:text-sm text-yellow-400 whitespace-nowrap">Top 5%</span>
-            </div>
-          </div>
-
+            }
+          />
         </div>
+
       </div>
     </div>
   );

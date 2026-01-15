@@ -14,11 +14,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
 
   const {
@@ -32,25 +33,48 @@ export default function Login() {
   const onSubmit = async (data: LoginInput) => {
     setIsLoading(true);
     try {
+      // Prepare form data for OAuth2 standard (x-www-form-urlencoded)
       const formData = new URLSearchParams();
       formData.append("email", data.email);
       formData.append("password", data.password);
 
-      const response = await apiRequest("POST", "/auth/token", formData.toString());
+      // Using direct fetch to control headers/body explicitly
+      const res = await fetch("/auth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString(),
+      });
 
-      if (response.access_token) {
-        sessionStorage.setItem("token", response.access_token);
+      const responseData = await res.json();
+
+      if (!res.ok) {
+        throw new Error(responseData.detail || responseData.message || "Login failed");
+      }
+
+      // Success: Store tokens and role
+      if (responseData.access_token) {
+        sessionStorage.setItem("token", responseData.access_token);
+        
+        // Store admin status if present (matches routes.ts logic)
+        if (responseData.isAdmin) {
+          sessionStorage.setItem("isAdmin", "true");
+        } else {
+          sessionStorage.removeItem("isAdmin");
+        }
 
         toast({
-          title: "Success",
+          title: "Welcome back",
           description: "Logged in successfully!",
+          className: "bg-emerald-600 text-white border-emerald-700",
         });
 
-        setLocation("/dashboard");
+        // Small delay to ensure storage is set before routing
+        setTimeout(() => setLocation("/dashboard"), 100);
       }
     } catch (error: any) {
+      console.error("Login error:", error);
       toast({
-        title: "Error",
+        title: "Access Denied",
         description: error.message || "Invalid email or password",
         variant: "destructive",
       });
@@ -65,7 +89,7 @@ export default function Login() {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none"></div>
 
-      <Card className="w-full max-w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
+      <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
         <CardHeader className="space-y-2 pb-6">
           <div className="flex items-center justify-center mb-4">
             <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
@@ -89,8 +113,8 @@ export default function Login() {
               </Label>
               <Input
                 id="email"
-                data-testid="input-email"
                 type="email"
+                autoComplete="username"
                 placeholder="trader@example.com"
                 className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
                 {...register("email")}
@@ -106,18 +130,29 @@ export default function Login() {
                 <Label htmlFor="password" className="text-gray-300 text-sm font-medium">
                   Password
                 </Label>
-                <Link href="/reset-password" data-testid="link-forgot-password" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                <Link href="/reset-password" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
                   Forgot password?
                 </Link>
               </div>
-              <Input
-                id="password"
-                data-testid="input-password"
-                type="password"
-                placeholder="••••••••"
-                className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
-                {...register("password")}
-              />
+              
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all pr-10"
+                  {...register("password")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-200 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              
               {errors.password && (
                 <p className="text-xs text-red-400 ml-1">{errors.password.message}</p>
               )}
@@ -125,13 +160,12 @@ export default function Login() {
 
             <Button
               type="submit"
-              data-testid="button-submit"
               disabled={isLoading}
               className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 active:translate-y-0"
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Signing in...</span>
                 </div>
               ) : "Sign In"}
@@ -141,7 +175,6 @@ export default function Login() {
               Don't have an account?{" "}
               <Link
                 href="/register"
-                data-testid="link-register"
                 className="text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4"
               >
                 Create Account
