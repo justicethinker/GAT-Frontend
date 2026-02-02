@@ -39,7 +39,7 @@ const clearAuth = () => {
   queryClient.clear();
 };
 
-// CRITICAL FIX: Explicit Fetcher to ensure Token is sent
+//  Explicit Fetcher to ensure Token is sent
 const authenticatedFetcher = async <T,>(context: { queryKey: readonly unknown[] }): Promise<T> => {
   const [path] = context.queryKey as string[];
   const token = sessionStorage.getItem("token");
@@ -122,7 +122,7 @@ const FullScreenLoader = ({ label = "Loading GAT System..." }: { label?: string 
 );
 
 // ──────────────────────────────────────────────────────────────
-// SECURITY GUARDS (FIXED)
+// SECURITY GUARDS 
 // ──────────────────────────────────────────────────────────────
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
