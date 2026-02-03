@@ -1,4 +1,4 @@
-export const API_BASE = import.meta.env.VITE_BACKEND_URL ?? "";
+export const API_BASE = import.meta.env.VITE_BACKEND_URL ?? "https://gatbackend.name.ng";
 
 export function buildUrl(path: string) {
   // Ensure path starts with a slash
