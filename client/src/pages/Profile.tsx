@@ -146,7 +146,7 @@ export default function Profile() {
       }
 
       // 2. Update Profile Data
-      const res = await fetch('/auth/user-info', {
+      const res = await fetch('https://gatbackend.name.ng/auth/user-info', {
         method: 'PATCH',
         headers: { 
             'Content-Type': 'application/json',

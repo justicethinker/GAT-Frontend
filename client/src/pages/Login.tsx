@@ -39,7 +39,7 @@ export default function Login() {
       formData.append("password", data.password);
 
       // Using direct fetch to control headers/body explicitly
-      const res = await fetch("/auth/token", {
+      const res = await fetch("https://gatbackend.name.ng/auth/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: formData.toString(),

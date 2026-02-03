@@ -24,7 +24,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 // 1. CONFIGURATION & TYPES
 // ──────────────────────────────────────────────────────────────
 
-const API_BASE = ""; 
+const API_BASE = "https://gatbackend.name.ng"; 
 
 interface Opportunity {
   symbol: string;

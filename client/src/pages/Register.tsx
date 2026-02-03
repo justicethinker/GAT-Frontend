@@ -47,7 +47,7 @@ export default function Register() {
     setIsLoading(true);
     try {
       // Endpoint: POST /auth/create-user
-      const res = await fetch("/auth/create-user", {
+      const res = await fetch("https://gatbackend.name.ng/auth/create-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // Only send email/password to backend (omit confirmPassword)
