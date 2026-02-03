@@ -19,6 +19,9 @@ export default defineConfig({
         ]
       : []),
   ],
+  preview: {
+    allowedHosts: ["godslovetrading.com"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
