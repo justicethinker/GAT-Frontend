@@ -8,6 +8,7 @@ import {
   Wallet, TrendingUp, Activity, Trophy, Mail, Loader2 
 } from 'lucide-react';
 import { Header } from '@/components/Header';
+import { buildUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
 
@@ -134,7 +135,7 @@ export default function Profile() {
       if (avatarFile) {
         const formData = new FormData();
         formData.append('avatar', avatarFile);
-        const uploadRes = await fetch('/auth/avatar', { 
+        const uploadRes = await fetch(buildUrl('/auth/avatar'), { 
             method: 'POST', 
             headers: { Authorization: `Bearer ${token}` },
             body: formData 
@@ -146,7 +147,7 @@ export default function Profile() {
       }
 
       // 2. Update Profile Data
-      const res = await fetch('https://gatbackend.name.ng/auth/user-info', {
+      const res = await fetch(buildUrl('/auth/user-info'), {
         method: 'PATCH',
         headers: { 
             'Content-Type': 'application/json',

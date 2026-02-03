@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { notifySuccess } from '@/lib/notify';
 
 // ──────────────────────────────────────────────────────────────
 // 1. TYPES & FETCHER
@@ -94,7 +95,9 @@ export function Header() {
     sessionStorage.clear();
     localStorage.clear();
     queryClient.clear();
-    window.location.href = "/";
+    // Give user a small confirmation before redirect
+    notifySuccess({ title: 'Signed out', description: 'You have been securely signed out.' });
+    setTimeout(() => (window.location.href = "/"), 300);
   };
 
   const getInitials = (email?: string) => {

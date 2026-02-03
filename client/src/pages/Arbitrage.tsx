@@ -8,6 +8,7 @@ import {
   History, Loader2, CheckCircle2, UploadCloud, FileText
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
+import { buildUrl } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,8 +24,6 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 // ──────────────────────────────────────────────────────────────
 // 1. CONFIGURATION & TYPES
 // ──────────────────────────────────────────────────────────────
-
-const API_BASE = "https://gatbackend.name.ng"; 
 
 interface Opportunity {
   symbol: string;
@@ -189,7 +188,7 @@ export default function Arbitrage() {
   // --- Mutations ---
   const tradeMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch(`${API_BASE}/arb/perform-arb-trade`, {
+      const res = await fetch(buildUrl('/arb/perform-arb-trade'), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionStorage.getItem("token")}` },
         body: JSON.stringify(data),
@@ -233,7 +232,7 @@ export default function Arbitrage() {
         );
       }
 
-      const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", headers, body });
+      const res = await fetch(buildUrl(endpoint), { method: "POST", headers, body });
       if (!res.ok) throw new Error((await res.json()).detail || "Transaction Failed");
       return res.json();
     },

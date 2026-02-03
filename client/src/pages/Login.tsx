@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { buildUrl } from "@/lib/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginInput } from "@shared/schema";
@@ -14,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { notifySuccess, notifyError } from "@/lib/notify";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function Login() {
@@ -21,6 +24,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const {
     register,
@@ -38,8 +42,8 @@ export default function Login() {
       formData.append("email", data.email);
       formData.append("password", data.password);
 
-      // Using direct fetch to control headers/body explicitly
-      const res = await fetch("https://gatbackend.name.ng/auth/token", {
+      // Use centralized URL builder (use proxy by default)
+      const res = await fetch(buildUrl("/auth/token"), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: formData.toString(),
@@ -54,7 +58,7 @@ export default function Login() {
       // Success: Store tokens and role
       if (responseData.access_token) {
         sessionStorage.setItem("token", responseData.access_token);
-        
+
         // Store admin status if present (matches routes.ts logic)
         if (responseData.isAdmin) {
           sessionStorage.setItem("isAdmin", "true");
@@ -62,22 +66,15 @@ export default function Login() {
           sessionStorage.removeItem("isAdmin");
         }
 
-        toast({
-          title: "Welcome back",
-          description: "Logged in successfully!",
-          className: "bg-emerald-600 text-white border-emerald-700",
-        });
+        notifySuccess({ title: "Signed in", description: "Welcome back — redirecting to your dashboard." });
 
-        // Small delay to ensure storage is set before routing
-        setTimeout(() => setLocation("/dashboard"), 100);
+        // Ensure user-info is fresh before navigating
+        await queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] });
+        setLocation("/dashboard");
       }
     } catch (error: any) {
       console.error("Login error:", error);
-      toast({
-        title: "Access Denied",
-        description: error.message || "Invalid email or password",
-        variant: "destructive",
-      });
+      notifyError({ title: "Sign in failed", description: error.message || "Invalid email or password" });
     } finally {
       setIsLoading(false);
     }

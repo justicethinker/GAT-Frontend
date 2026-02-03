@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { buildUrl } from '@/lib/api';
 import { useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -285,7 +286,7 @@ const Admin = () => {
       const token = sessionStorage.getItem("token");
       const headers = { 'Authorization': token ? `Bearer ${token}` : '' };
 
-      let url = `https://gatbackend.name.ng/admini/dashboard?page=${userPage}`;
+      let url = `${buildUrl('/admini/dashboard')}?page=${userPage}`;
       if (filterStatus === "Suspended") {
         url += `&suspended=true`;
       }
@@ -343,7 +344,7 @@ const Admin = () => {
       
       if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
 
-      const response = await fetch(`https://gatbackend.name.ng/admini/suspend-user?user_id=${userId}&action=${action}`, {
+      const response = await fetch(`${buildUrl('/admini/suspend-user')}?user_id=${userId}&action=${action}`, {
         method: "GET",
         headers: { 'Authorization': token ? `Bearer ${token}` : '' }
       });

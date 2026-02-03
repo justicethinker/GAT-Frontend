@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query"; // Import QueryClient
+import { buildUrl } from "@/lib/api";
 import { loginSchema, type LoginInput } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ShieldAlert } from "lucide-react";
+import { notifySuccess, notifyError } from "@/lib/notify";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
@@ -54,7 +56,7 @@ export default function AdminLogin() {
       formData.append("adminId", adminId.trim());
 
       // 3. Authenticate
-      const res = await fetch("https://gatbackend.name.ng/auth/token", {
+      const res = await fetch(buildUrl("/auth/token"), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: formData.toString(),
@@ -81,22 +83,14 @@ export default function AdminLogin() {
         // in App.tsx re-fetches the user status immediately.
         await queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] });
 
-        toast({
-          title: "Admin Access Granted",
-          description: "Welcome to the control panel.",
-          className: "bg-emerald-600 text-white border-emerald-700",
-        });
+        notifySuccess({ title: "Admin access granted", description: "Welcome to the control panel." });
 
         // Navigate immediately (awaiting invalidation above ensures data is fresh)
         setLocation("/admin");
       }
     } catch (error: any) {
       console.error("Admin Login Error:", error);
-      toast({
-        title: "Access Denied",
-        description: error.message || "Invalid credentials or Admin ID",
-        variant: "destructive",
-      });
+        notifyError({ title: "Admin sign in failed", description: error.message || "Invalid credentials or Admin ID" });
     } finally {
       setIsLoading(false);
     }

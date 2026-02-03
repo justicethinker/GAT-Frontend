@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { buildUrl } from "@/lib/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -14,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { notifySuccess, notifyError } from "@/lib/notify";
 import { Eye, EyeOff, Loader2, UserPlus } from "lucide-react";
 
 // Local Schema for Registration (includes Confirm Password)
@@ -46,8 +48,8 @@ export default function Register() {
   const onSubmit = async (data: RegisterInput) => {
     setIsLoading(true);
     try {
-      // Endpoint: POST /auth/create-user
-      const res = await fetch("https://gatbackend.name.ng/auth/create-user", {
+      // Endpoint: POST /auth/create-user (use proxy by default)
+      const res = await fetch(buildUrl("/auth/create-user"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // Only send email/password to backend (omit confirmPassword)
@@ -60,21 +62,13 @@ export default function Register() {
         throw new Error(responseData.detail || responseData.message || "Registration failed");
       }
 
-      toast({
-        title: "Account Created",
-        description: "Welcome to TradePro! Please sign in to continue.",
-        className: "bg-emerald-600 text-white border-emerald-700",
-      });
+      notifySuccess({ title: "Account created", description: "Your account was created successfully. Please sign in." });
 
       // Redirect to Login
       setTimeout(() => setLocation("/login"), 1500);
 
     } catch (error: any) {
-      toast({
-        title: "Registration Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      notifyError({ title: "Registration failed", description: error.message });
     } finally {
       setIsLoading(false);
     }
