@@ -23,5 +23,7 @@ export function buildUrl(path: string) {
     );
   }
 
-  return API_BASE ? `${API_BASE}${normalized}` : normalized;
+  // Remove trailing slash from API_BASE to avoid double slashes
+  const baseUrl = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
+  return baseUrl ? `${baseUrl}${normalized}` : normalized;
 }
