@@ -13,7 +13,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // Limit: 5MB
 });
 
-const API_BASE_URL = process.env.BACKEND_URL || "https://gatbackend.name.ng";
+const API_BASE_URL = process.env.BACKEND_URL || "https://www.gatbackend.name.ng/";
 const ADMIN_ID = process.env.ADMIN_ID || "tradeproadmin2025";
 const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
 

@@ -13,9 +13,13 @@ RUN npm install
 # Copy the rest of the app
 COPY . .
 
-# Accept build argument for backend URL
-ARG VITE_BACKEND_URL=https://gatbackend.name.ng
+# Accept build argument for backend URL (frontend uses relative URLs to proxy through server)
+ARG VITE_BACKEND_URL=""
 ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
+
+# Backend URL for server-side proxy requests
+ARG BACKEND_URL=https://www.gatbackend.name.ng/
+ENV BACKEND_URL=${BACKEND_URL}
 
 # Build the app with the environment variable
 RUN npm run build
