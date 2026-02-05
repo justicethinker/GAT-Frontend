@@ -192,16 +192,6 @@ All components are from Shadcn/UI, providing:
 - Component styles: Shadcn components use Tailwind classes
 
 
-### Login Issue (Deployment)
-Fixed a critical issue where login failed in production because the frontend was calling itself instead of the backend API. This was caused by:
-- `VITE_BACKEND_URL` not being passed during Docker build
-- Some API calls not using the `buildUrl()` helper
-- Incorrect Docker configuration
-
-**Fix applied**: All API calls now properly use `buildUrl()`, and environment variables are correctly passed during build.
-
-See `LOGIN_FIX_SUMMARY.md` for detailed information.
-
 ## Troubleshooting
 
 ### Frontend calls itself instead of backend
