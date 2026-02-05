@@ -49,7 +49,7 @@ async function proxyRequest(
       signal: controller.signal,
     };
 
-    // Body Handling Logic
+    const API_BASE_URL = process.env.BACKEND_URL || "https://www.gatbackend.name.ng";
     if (body && method !== "GET" && method !== "HEAD") {
       if (body instanceof URLSearchParams) {
         options.headers = {

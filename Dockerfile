@@ -14,7 +14,7 @@ RUN npm install
 COPY . .
 
 # Accept build argument for backend URL
-ARG VITE_BACKEND_URL=https://www.gatbackend.name.ng/
+ARG VITE_BACKEND_URL=https://www.gatbackend.name.ng
 ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
 
 # Build the app with the environment variable

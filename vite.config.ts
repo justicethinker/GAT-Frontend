@@ -39,5 +39,22 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    proxy: {
+      '^/auth': {
+        target: process.env.VITE_BACKEND_URL || 'https://gat-zm1r.onrender.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '^/dash': {
+        target: process.env.VITE_BACKEND_URL || 'https://gat-zm1r.onrender.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '^/arb': {
+        target: process.env.VITE_BACKEND_URL || 'https://gat-zm1r.onrender.com',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
 });
