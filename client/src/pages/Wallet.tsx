@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { buildUrl } from "@/lib/api";
 
 // ──────────────────────────────────────────────────────────────
 // 1. TYPES & SCHEMAS
@@ -135,7 +136,7 @@ const ActionGrid = ({ walletAddress }: { walletAddress: string }) => {
 
   const mutation = useMutation({
     mutationFn: async (data: TransferForm) => {
-      const res = await fetch("/dash/transfer", {
+      const res = await fetch(buildUrl("/dash/transfer"), {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -303,7 +304,7 @@ const TransactionManager = () => {
       fd.append("currency", coin);
       fd.append("receipt", receipt);
       
-      const res = await fetch("/dash/deposits", {
+      const res = await fetch(buildUrl("/dash/deposits"), {
         method: "POST",
         headers: { "Authorization": `Bearer ${sessionStorage.getItem("token")}` },
         body: fd
@@ -321,7 +322,7 @@ const TransactionManager = () => {
 
   const withdrawMutation = useMutation({
     mutationFn: async (data: WithdrawForm) => {
-      const res = await fetch("/dash/withdrawals", {
+      const res = await fetch(buildUrl("/dash/withdrawals"), {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

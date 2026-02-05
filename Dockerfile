@@ -13,12 +13,15 @@ RUN npm install
 # Copy the rest of the app
 COPY . .
 
-# Build the app
+# Accept build argument for backend URL
+ARG VITE_BACKEND_URL=https://gatbackend.name.ng
+ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
+
+# Build the app with the environment variable
 RUN npm run build
 
-
 # Expose port
-EXPOSE 4173
+EXPOSE 5000
 
-# Start the app
-CMD ["npm", "run", "preview"]
+# Start the app in production mode
+CMD ["npm", "run", "start"]

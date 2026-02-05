@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useLocation } from 'wouter';
+import { buildUrl } from '@/lib/api';
 import { Header } from '@/components/Header';
 import { useTheme } from '@/hooks/useTheme'; // Ensure this hook exists or mock it
 import { useToast } from '@/hooks/use-toast'; // Shadcn toast hook
@@ -66,7 +67,7 @@ export default function Settings() {
   const handleLogout = async () => {
     try {
       // 1. Attempt server-side logout (optional, depending on backend)
-      await fetch('/auth/logout', { method: 'POST' }).catch(() => {}); 
+      await fetch(buildUrl('/auth/logout'), { method: 'POST' }).catch(() => {}); 
       
       // 2. Clear Client State
       sessionStorage.clear();
@@ -161,7 +162,7 @@ function AccountTab({ user }: { user?: UserProfile }) {
 
   const mutation = useMutation({
     mutationFn: async (data: PasswordFormValues) => {
-      const res = await fetch('/auth/reset-password', { // Updated to match likely route
+      const res = await fetch(buildUrl('/auth/reset-password'), { // Updated to match likely route
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

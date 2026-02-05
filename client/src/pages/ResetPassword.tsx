@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { buildUrl } from "@/lib/api";
 import { Eye, EyeOff, Loader2, KeyRound, MailCheck } from "lucide-react";
 
 // --- SCHEMAS ---
@@ -55,7 +56,7 @@ export default function ResetPassword() {
     setIsLoading(true);
     try {
       // POST /auth/otp-resend (or /auth/forgot-password)
-      const res = await fetch("/auth/otp-resend", {
+      const res = await fetch(buildUrl("/auth/otp-resend"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -81,7 +82,7 @@ export default function ResetPassword() {
     setIsLoading(true);
     try {
       // POST /auth/reset-password
-      const res = await fetch("/auth/reset-password", {
+      const res = await fetch(buildUrl("/auth/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 

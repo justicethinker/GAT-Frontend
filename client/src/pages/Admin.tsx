@@ -365,7 +365,7 @@ const Admin = () => {
     e.preventDefault();
     try {
         const token = sessionStorage.getItem("token");
-        const response = await fetch("/auth/create-user", {
+        const response = await fetch(buildUrl("/auth/create-user"), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
