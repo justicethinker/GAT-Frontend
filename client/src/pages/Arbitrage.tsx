@@ -70,7 +70,7 @@ type WalletFormValues = z.infer<typeof WalletSchema>;
 
 const authenticatedFetcher = async (context: { queryKey: readonly unknown[] }) => {
   const [path, params] = context.queryKey as [string, any?];
-  const url = new URL(`${window.location.origin}${path}`);
+  const url = new URL(buildUrl(path), window.location.origin);
   const token = sessionStorage.getItem("token");
 
   if (params) {

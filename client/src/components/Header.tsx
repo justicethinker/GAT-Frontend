@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { notifySuccess } from '@/lib/notify';
+import { buildUrl } from "@/lib/api";
 
 // ──────────────────────────────────────────────────────────────
 // 1. TYPES & FETCHER
@@ -31,8 +32,8 @@ interface Notification {
 const authenticatedFetcher = async <T,>(context: { queryKey: readonly unknown[] }): Promise<T> => {
   const [path] = context.queryKey as string[];
   const token = sessionStorage.getItem("token");
-  // Use relative path directly
-  const res = await fetch(path, {
+  // Use buildUrl to ensure requests go to the backend server
+  const res = await fetch(buildUrl(path), {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   });
   if (!res.ok) throw new Error("Failed to fetch");

@@ -45,7 +45,7 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 const authenticatedFetcher = async <T,>(context: { queryKey: readonly unknown[] }): Promise<T> => {
   const [path] = context.queryKey as string[];
   const token = sessionStorage.getItem("token");
-  const res = await fetch(path, {
+  const res = await fetch(buildUrl(path), {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   });
   if (!res.ok) throw new Error("Failed to fetch data");

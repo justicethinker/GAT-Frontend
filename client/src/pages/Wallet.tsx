@@ -71,8 +71,8 @@ const authenticatedFetcher = async (context: { queryKey: readonly unknown[]; sig
   const [path] = queryKey as [string];
   const token = sessionStorage.getItem("token");
   
-  // Use relative path proxy
-  const res = await fetch(path, {
+  // Use buildUrl to ensure requests go to the backend server
+  const res = await fetch(buildUrl(path), {
     headers: { 
       "Content-Type": "application/json",
       ...(token ? { "Authorization": `Bearer ${token}` } : {})

@@ -1,6 +1,7 @@
 import { useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import { buildUrl } from "@/lib/api";
 import { 
   Wallet, TrendingUp, Activity, Trophy, ArrowUpRight, 
   ArrowDownLeft, Bell, AlertCircle, Loader2 
@@ -79,7 +80,7 @@ const authenticatedFetcher = async (context: { queryKey: readonly unknown[]; sig
 
   if (!token) throw new Error("UNAUTHORIZED");
 
-  const res = await fetch(path, {
+  const res = await fetch(buildUrl(path), {
     headers: { 
       "Content-Type": "application/json",
       "Authorization": `Bearer ${token}` 
