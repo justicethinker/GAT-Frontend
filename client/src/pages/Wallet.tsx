@@ -383,8 +383,8 @@ const TransactionManager = () => {
               <div className="space-y-2">
                 <Label>Asset</Label>
                 <Select value={coin} onValueChange={setCoin}>
-                  <SelectTrigger className="bg-slate-950 border-slate-800"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                  <SelectTrigger className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white">
                     <SelectItem value="USDT">USDT (TRC20)</SelectItem>
                     <SelectItem value="BTC">Bitcoin</SelectItem>
                     <SelectItem value="ETH">Ethereum</SelectItem>
@@ -401,7 +401,7 @@ const TransactionManager = () => {
                     const val = e.target.value;
                     if (val === '' || /^\d*\.?\d*$/.test(val)) setDepositAmount(val);
                   }} 
-                  className="bg-slate-950 border-slate-800 text-white" 
+                  className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white" 
                   placeholder="0.00" 
                 />
               </div>
@@ -420,7 +420,7 @@ const TransactionManager = () => {
             
             <div className="space-y-2">
               <Label>Proof of Payment</Label>
-              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-slate-800 border-dashed rounded-xl cursor-pointer bg-slate-950 hover:bg-slate-900 transition-colors">
+              <label className="flex flex-col items-center justify-center w-full h-40 border border-emerald-500/20 border-dashed rounded-xl cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 transition-all duration-200 group">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                   <UploadCloud className="w-8 h-8 mb-3 text-slate-500" />
                   <p className="text-sm text-slate-500">{receipt ? receipt.name : "Click to upload image"}</p>
