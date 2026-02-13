@@ -285,16 +285,39 @@ const AccountsGrid = ({ stats }: { stats?: UserInfo }) => {
   );
 };
 
+
+interface DepositAddress {
+  id: number;
+  name: string;
+  address: string;
+}
+
 const TransactionManager = () => {
   const { toast } = useToast();
   const [receipt, setReceipt] = useState<File | null>(null);
   const [coin, setCoin] = useState("USDT");
+  const { data: depositAddresses = [], isLoading: addressLoading } = useQuery<DepositAddress[]>({
+  queryKey: ["/dash/deposit-address"],
+  queryFn: authenticatedFetcher
+  });
 
   // React Hook Form for Withdraw
   const withdrawForm = useForm<WithdrawForm>({ resolver: zodResolver(WithdrawSchema) });
   
   // Custom State for Deposit (Controlled Text Input)
   const [depositAmount, setDepositAmount] = useState("");
+
+  const coinNameMap: Record<string, string> = {
+  BTC: "Bitcoin",
+  ETH: "Ethereum",
+  USDT: "USDT(TRC20)",
+  };
+
+  const selectedAddress =
+  depositAddresses.find(
+    (item) => item.name === coinNameMap[coin]
+  )?.address || "";
+
 
   const depositMutation = useMutation({
     mutationFn: async () => {
@@ -351,6 +374,9 @@ const TransactionManager = () => {
           </TabsList>
         </div>
 
+
+        
+
         <TabsContent value="deposit" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
@@ -382,7 +408,11 @@ const TransactionManager = () => {
               <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl flex items-center justify-between">
                 <div className="text-xs">
                   <p className="text-slate-500 uppercase font-bold">Deposit Address</p>
-                  <p className="text-emerald-400 font-mono mt-1">0x742d35...96C4b4</p>
+                  <p className="text-emerald-400 font-mono mt-1 break-all">
+  {addressLoading
+    ? "Loading..."
+    : selectedAddress || "No address available"}
+</p>
                 </div>
                 <Button size="sm" variant="ghost" className="h-8"><Copy className="w-3 h-3" /></Button>
               </div>
