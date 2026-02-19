@@ -311,6 +311,8 @@ const TransactionManager = () => {
   BTC: "Bitcoin",
   ETH: "Ethereum",
   USDT: "USDT(TRC20)",
+  USDC: "USDC",
+  Solana: "Solana",
   };
 
   const selectedAddress =
@@ -388,6 +390,8 @@ const TransactionManager = () => {
                     <SelectItem value="USDT">USDT (TRC20)</SelectItem>
                     <SelectItem value="BTC">Bitcoin</SelectItem>
                     <SelectItem value="ETH">Ethereum</SelectItem>
+                    <SelectItem value="ETH">Solana</SelectItem>
+                    <SelectItem value="ETH">USDC</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
