@@ -285,16 +285,39 @@ const AccountsGrid = ({ stats }: { stats?: UserInfo }) => {
   );
 };
 
+
+interface DepositAddress {
+  id: number;
+  name: string;
+  address: string;
+}
+
 const TransactionManager = () => {
   const { toast } = useToast();
   const [receipt, setReceipt] = useState<File | null>(null);
   const [coin, setCoin] = useState("USDT");
+  const { data: depositAddresses = [], isLoading: addressLoading } = useQuery<DepositAddress[]>({
+  queryKey: ["/dash/deposit-address"],
+  queryFn: authenticatedFetcher
+  });
 
   // React Hook Form for Withdraw
   const withdrawForm = useForm<WithdrawForm>({ resolver: zodResolver(WithdrawSchema) });
   
   // Custom State for Deposit (Controlled Text Input)
   const [depositAmount, setDepositAmount] = useState("");
+
+  const coinNameMap: Record<string, string> = {
+  BTC: "Bitcoin",
+  ETH: "Ethereum",
+  USDT: "USDT(TRC20)",
+  };
+
+  const selectedAddress =
+  depositAddresses.find(
+    (item) => item.name === coinNameMap[coin]
+  )?.address || "";
+
 
   const depositMutation = useMutation({
     mutationFn: async () => {
@@ -351,17 +374,20 @@ const TransactionManager = () => {
           </TabsList>
         </div>
 
+
+        
+
         <TabsContent value="deposit" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-emerald-200">Asset</Label>
                 <Select value={coin} onValueChange={setCoin}>
-                  <SelectTrigger className="bg-slate-950 border-slate-800 text-emerald-200"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-emerald-200">
-                    <SelectItem value="USDT" className="text-emerald-400">USDT (TRC20)</SelectItem>
-                    <SelectItem value="BTC" className="text-yellow-400">Bitcoin</SelectItem>
-                    <SelectItem value="ETH" className="text-blue-400">Ethereum</SelectItem>
+                  <SelectTrigger className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white">
+                    <SelectItem value="USDT">USDT (TRC20)</SelectItem>
+                    <SelectItem value="BTC">Bitcoin</SelectItem>
+                    <SelectItem value="ETH">Ethereum</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -375,22 +401,26 @@ const TransactionManager = () => {
                     const val = e.target.value;
                     if (val === '' || /^\d*\.?\d*$/.test(val)) setDepositAmount(val);
                   }} 
-                  className="bg-slate-950 border-slate-800 text-emerald-200 placeholder:text-emerald-400" 
+                  className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white" 
                   placeholder="0.00" 
                 />
               </div>
               <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl flex items-center justify-between">
                 <div className="text-xs">
-                  <p className="text-emerald-300 uppercase font-bold">Deposit Address</p>
-                  <p className="text-white font-mono mt-1">0x742d35...96C4b4</p>
+                  <p className="text-slate-500 uppercase font-bold">Deposit Address</p>
+                  <p className="text-emerald-400 font-mono mt-1 break-all">
+  {addressLoading
+    ? "Loading..."
+    : selectedAddress || "No address available"}
+</p>
                 </div>
                 <Button size="sm" variant="ghost" className="h-8 text-emerald-300"><Copy className="w-3 h-3" /></Button>
               </div>
             </div>
             
             <div className="space-y-2">
-              <Label className="text-emerald-200">Proof of Payment</Label>
-              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-emerald-800 border-dashed rounded-xl cursor-pointer bg-slate-950 hover:bg-slate-900 transition-colors">
+              <Label>Proof of Payment</Label>
+              <label className="flex flex-col items-center justify-center w-full h-40 border border-emerald-500/20 border-dashed rounded-xl cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 transition-all duration-200 group">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                   <UploadCloud className="w-8 h-8 mb-3 text-emerald-400" />
                   <p className="text-sm text-emerald-200">{receipt ? receipt.name : "Click to upload image"}</p>
