@@ -419,7 +419,7 @@ const TransactionManager = () => {
             </div>
             
             <div className="space-y-2">
-              <Label>Proof of Payment</Label>
+              <Label className="text-emerald-200">Proof of Payment</Label>
               <label className="flex flex-col items-center justify-center w-full h-40 border border-emerald-500/20 border-dashed rounded-xl cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 transition-all duration-200 group">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                   <UploadCloud className="w-8 h-8 mb-3 text-emerald-400" />

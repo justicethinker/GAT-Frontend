@@ -14,7 +14,7 @@ const upload = multer({
 });
 
 const API_BASE_URL = process.env.BACKEND_URL || "https://www.gatbackend.name.ng/";
-const ADMIN_ID = process.env.ADMIN_ID || "tradeproadmin2025";
+const ADMIN_ID = process.env.ADMIN_ID || "GATadmin2025";
 const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
 
 interface ProxyResult {

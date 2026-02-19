@@ -1,4 +1,4 @@
-# TradePro Trading Dashboard - Design Guidelines
+# GAT Trading Dashboard - Design Guidelines
 
 ## Design Approach
 **Reference-Based Approach**: The design is fully specified in the provided HTML files. This is a professional cryptocurrency/forex/futures trading platform with an established dark theme aesthetic and complete component library.

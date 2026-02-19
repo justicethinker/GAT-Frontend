@@ -306,7 +306,7 @@ function AppearanceTab({ theme, setTheme }: { theme: 'light' | 'dark' | 'system'
     <div className="space-y-8">
       <div className="border-b border-slate-800 pb-6">
         <h2 className="text-2xl font-bold text-white mb-2">Appearance</h2>
-        <p className="text-slate-400">Customize how TradePro looks on your device.</p>
+        <p className="text-slate-400">Customize how GAT looks on your device.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">

@@ -91,7 +91,7 @@ export default function Register() {
             Create Account
           </CardTitle>
           <CardDescription className="text-center text-gray-400">
-            Join TradePro and start trading today
+            Join GAT and start trading today
           </CardDescription>
         </CardHeader>
         
