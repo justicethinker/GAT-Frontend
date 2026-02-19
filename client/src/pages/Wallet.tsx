@@ -355,18 +355,18 @@ const TransactionManager = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Asset</Label>
+                <Label className="text-emerald-200">Asset</Label>
                 <Select value={coin} onValueChange={setCoin}>
-                  <SelectTrigger className="bg-slate-950 border-slate-800"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                    <SelectItem value="USDT">USDT (TRC20)</SelectItem>
-                    <SelectItem value="BTC">Bitcoin</SelectItem>
-                    <SelectItem value="ETH">Ethereum</SelectItem>
+                  <SelectTrigger className="bg-slate-950 border-slate-800 text-emerald-200"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-emerald-200">
+                    <SelectItem value="USDT" className="text-emerald-400">USDT (TRC20)</SelectItem>
+                    <SelectItem value="BTC" className="text-yellow-400">Bitcoin</SelectItem>
+                    <SelectItem value="ETH" className="text-blue-400">Ethereum</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Amount</Label>
+                <Label className="text-emerald-200">Amount</Label>
                 <Input 
                   type="text"
                   inputMode="decimal"
@@ -375,25 +375,25 @@ const TransactionManager = () => {
                     const val = e.target.value;
                     if (val === '' || /^\d*\.?\d*$/.test(val)) setDepositAmount(val);
                   }} 
-                  className="bg-slate-950 border-slate-800 text-white" 
+                  className="bg-slate-950 border-slate-800 text-emerald-200 placeholder:text-emerald-400" 
                   placeholder="0.00" 
                 />
               </div>
               <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl flex items-center justify-between">
                 <div className="text-xs">
-                  <p className="text-slate-500 uppercase font-bold">Deposit Address</p>
-                  <p className="text-emerald-400 font-mono mt-1">0x742d35...96C4b4</p>
+                  <p className="text-emerald-300 uppercase font-bold">Deposit Address</p>
+                  <p className="text-white font-mono mt-1">0x742d35...96C4b4</p>
                 </div>
-                <Button size="sm" variant="ghost" className="h-8"><Copy className="w-3 h-3" /></Button>
+                <Button size="sm" variant="ghost" className="h-8 text-emerald-300"><Copy className="w-3 h-3" /></Button>
               </div>
             </div>
             
             <div className="space-y-2">
-              <Label>Proof of Payment</Label>
-              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-slate-800 border-dashed rounded-xl cursor-pointer bg-slate-950 hover:bg-slate-900 transition-colors">
+              <Label className="text-emerald-200">Proof of Payment</Label>
+              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-emerald-800 border-dashed rounded-xl cursor-pointer bg-slate-950 hover:bg-slate-900 transition-colors">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <UploadCloud className="w-8 h-8 mb-3 text-slate-500" />
-                  <p className="text-sm text-slate-500">{receipt ? receipt.name : "Click to upload image"}</p>
+                  <UploadCloud className="w-8 h-8 mb-3 text-emerald-400" />
+                  <p className="text-sm text-emerald-200">{receipt ? receipt.name : "Click to upload image"}</p>
                 </div>
                 <input type="file" className="hidden" onChange={e => setReceipt(e.target.files?.[0] || null)} />
               </label>
@@ -497,16 +497,16 @@ export default function Wallet() {
             
             {/* Convert Card (Future Feature) */}
             <Card className="bg-slate-900 border-slate-800 p-6 flex flex-col">
-               <h2 className="text-lg font-bold mb-4">Quick Convert</h2>
+               <h2 className="text-lg font-bold mb-4 text-emerald-200">Quick Convert</h2>
                <div className="flex-1 flex flex-col justify-center space-y-4 opacity-50 pointer-events-none">
                   <div className="p-4 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-500 mb-1">From</p>
-                    <div className="flex justify-between font-bold"><span>USDT</span><span>0.00</span></div>
+                    <p className="text-xs text-emerald-400 mb-1">From</p>
+                    <div className="flex justify-between font-bold text-emerald-200"><span>USDT</span><span>0.00</span></div>
                   </div>
                   <div className="flex justify-center"><ArrowDownLeft className="w-5 h-5 text-slate-600" /></div>
                   <div className="p-4 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-500 mb-1">To</p>
-                    <div className="flex justify-between font-bold"><span>BTC</span><span>0.00</span></div>
+                    <p className="text-xs text-emerald-400 mb-1">To</p>
+                    <div className="flex justify-between font-bold text-emerald-200"><span>BTC</span><span>0.00</span></div>
                   </div>
                   <Button className="w-full bg-slate-800">Coming Soon</Button>
                </div>
@@ -516,7 +516,7 @@ export default function Wallet() {
           {/* History Table */}
           <Card className="bg-slate-900 border-slate-800 overflow-hidden">
             <div className="p-6 border-b border-slate-800">
-              <h3 className="font-bold text-lg">Transaction History</h3>
+              <h3 className="font-bold text-lg text-emerald-200">Transaction History</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
