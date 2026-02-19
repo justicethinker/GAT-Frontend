@@ -136,7 +136,7 @@ export function Header() {
                 <LayoutDashboard className="text-emerald-500 w-5 h-5" />
               </div>
               <span className="text-white font-bold text-xl tracking-tight hidden sm:block">
-                TradePro
+                GAT
               </span>
             </Link>
           </div>

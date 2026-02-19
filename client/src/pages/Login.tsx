@@ -97,7 +97,7 @@ export default function Login() {
             Welcome Back
           </CardTitle>
           <CardDescription className="text-center text-gray-400">
-            Sign in to access your TradePro dashboard
+            Sign in to access your GAT dashboard
           </CardDescription>
         </CardHeader>
 

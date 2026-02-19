@@ -14,7 +14,7 @@ const upload = multer({
 });
 
 const API_BASE_URL = process.env.BACKEND_URL || "https://www.gatbackend.name.ng/";
-const ADMIN_ID = process.env.ADMIN_ID || "tradeproadmin2025";
+const ADMIN_ID = process.env.ADMIN_ID || "GATadmin2025";
 const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
 
 interface ProxyResult {
@@ -219,6 +219,56 @@ export async function registerRoutes(app: Express): Promise<Express> {
       const url = `${path}${buildQueryString(req.query)}`;
       const result = await proxyRequest(url, "GET", undefined, getAuthHeader(req));
       res.status(result.status).json(result.data);
+    });
+  });
+
+  // [GET] Deposit Address (per-currency)
+  // Tries upstream API first. If upstream is unavailable or returns non-OK, falls back to configured addresses.
+  app.get('/dash/deposit-address', async (req, res) => {
+    const currency = String(req.query.currency || "").toUpperCase();
+    // Attempt to proxy to upstream backend first
+    try {
+      const proxied = await proxyRequest(`/dash/deposit-address?currency=${encodeURIComponent(currency)}`, 'GET', undefined, getAuthHeader(req));
+      if (proxied.ok && proxied.data) {
+        return res.status(proxied.status).json(proxied.data);
+      }
+    } catch (e) {
+      // ignore and fallthrough to fallback
+    }
+
+    // Fallback addresses (admin-configured). Move to DB or env in production.
+    const FALLBACK: Record<string, string> = {
+      USDT: process.env.FALLBACK_USDT || "TQn9Y2khEsLJW1ChVW...5KcbLSE",
+      BTC: process.env.FALLBACK_BTC || "bc1qxy2kgdygjrsqtz...fjhx0wlh",
+      ETH: process.env.FALLBACK_ETH || "0x742d35Cc6634C053...96C4b4",
+    };
+
+    const address = FALLBACK[currency] || process.env.FALLBACK_DEFAULT || null;
+    if (!address) return res.status(404).json({ detail: "Deposit address not found" });
+    return res.json({ currency, address });
+  });
+
+  // Support plural and alternate endpoint variants used by frontend
+  const aliasDepositEndpoints = ['/dash/deposit-addresses', '/dash/deposits/address'];
+  aliasDepositEndpoints.forEach((ep) => {
+    app.get(ep, async (req, res) => {
+      const currency = String(req.query.currency || "").toUpperCase();
+      try {
+        const proxied = await proxyRequest(`${ep}?currency=${encodeURIComponent(currency)}`, 'GET', undefined, getAuthHeader(req));
+        if (proxied.ok && proxied.data) return res.status(proxied.status).json(proxied.data);
+      } catch (e) {
+        // ignore and fallback
+      }
+
+      const FALLBACK: Record<string, string> = {
+        USDT: process.env.FALLBACK_USDT || "TQn9Y2khEsLJW1ChVW...5KcbLSE",
+        BTC: process.env.FALLBACK_BTC || "bc1qxy2kgdygjrsqtz...fjhx0wlh",
+        ETH: process.env.FALLBACK_ETH || "0x742d35Cc6634C053...96C4b4",
+      };
+
+      const address = FALLBACK[currency] || process.env.FALLBACK_DEFAULT || null;
+      if (!address) return res.status(404).json({ detail: "Deposit address not found" });
+      return res.json({ currency, address });
     });
   });
 
