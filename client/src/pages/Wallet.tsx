@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { 
-  ArrowUpRight, ArrowDownLeft, RefreshCw, Wallet as WalletIcon, 
+  ArrowUpRight, ArrowDownLeft, RefreshCw,
   ArrowRightLeft, Copy, CheckCircle2, UploadCloud, Loader2, AlertCircle, TrendingUp
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
@@ -124,7 +124,7 @@ const PortfolioHeader = ({ stats, onRefresh, isLoading }: { stats?: UserInfo, on
   );
 };
 
-const ActionGrid = ({ walletAddress }: { walletAddress: string }) => {
+const ActionGrid = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
@@ -156,13 +156,10 @@ const ActionGrid = ({ walletAddress }: { walletAddress: string }) => {
     onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
   });
 
-  const copyAddress = () => {
-    navigator.clipboard.writeText(walletAddress);
-    toast({ title: "Copied", description: "Address copied to clipboard." });
-  };
+  // copyAddress removed — wallet address card was removed per design
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {/* Transfer Card */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
@@ -237,23 +234,7 @@ const ActionGrid = ({ walletAddress }: { walletAddress: string }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Address Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center text-slate-300">
-            <WalletIcon className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-white">Wallet Address</h3>
-            <p className="text-slate-400 text-xs font-mono bg-slate-950 px-2 py-1 rounded mt-1 truncate max-w-[140px] sm:max-w-[200px]">
-              {walletAddress || "Loading..."}
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={copyAddress} className="border-slate-700 hover:bg-slate-800 text-slate-300">
-          <Copy className="w-4 h-4 mr-2" /> Copy
-        </Button>
-      </div>
+      {/* Wallet address card removed — deposit addresses are handled in the deposit flow */}
     </div>
   );
 };
@@ -418,7 +399,14 @@ const TransactionManager = () => {
     : selectedAddress || "No address available"}
 </p>
                 </div>
-                <Button size="sm" variant="ghost" className="h-8 text-emerald-300"><Copy className="w-3 h-3" /></Button>
+                <Button size="sm" variant="ghost" className="h-8 text-emerald-300" onClick={() => {
+                  if (selectedAddress) {
+                    navigator.clipboard.writeText(selectedAddress);
+                    toast({ title: "Copied", description: "Deposit address copied to clipboard." });
+                  }
+                }}>
+                  <Copy className="w-3 h-3" />
+                </Button>
               </div>
             </div>
             
@@ -441,26 +429,26 @@ const TransactionManager = () => {
         <TabsContent value="withdraw" className="space-y-6">
           <form onSubmit={withdrawForm.handleSubmit((d) => withdrawMutation.mutate(d))} className="space-y-4 max-w-md mx-auto">
              <div className="space-y-2">
-                <Label>Currency</Label>
+                <Label className="text-emerald-200">Currency</Label>
                 <Select onValueChange={v => withdrawForm.setValue("currency", v)} defaultValue="USDT">
-                  <SelectTrigger className="bg-slate-950 border-slate-800"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                    <SelectItem value="USDT">USDT</SelectItem><SelectItem value="BTC">BTC</SelectItem>
+                  <SelectTrigger className="bg-slate-950 border-slate-800 text-emerald-200"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-emerald-200">
+                    <SelectItem value="USDT" className="text-emerald-400">USDT</SelectItem><SelectItem value="BTC" className="text-yellow-400">BTC</SelectItem>
                   </SelectContent>
                 </Select>
              </div>
              <div className="space-y-2">
-                <Label>Wallet Address</Label>
-                <Input {...withdrawForm.register("address")} className="bg-slate-950 border-slate-800 text-white" placeholder="0x..." />
-                {withdrawForm.formState.errors.address && <p className="text-red-500 text-xs">{withdrawForm.formState.errors.address.message}</p>}
+               <Label className="text-emerald-200">Wallet Address</Label>
+               <Input {...withdrawForm.register("address")} className="bg-slate-950 border-slate-800 text-emerald-200 placeholder:text-emerald-400" placeholder="0x..." />
+               {withdrawForm.formState.errors.address && <p className="text-red-500 text-xs">{withdrawForm.formState.errors.address.message}</p>}
              </div>
              <div className="space-y-2">
-                <Label>Amount</Label>
+                <Label className="text-emerald-200">Amount</Label>
                 <Input 
                   type="text"
                   inputMode="decimal"
                   {...withdrawForm.register("amount")} 
-                  className="bg-slate-950 border-slate-800 text-white" 
+                  className="bg-slate-950 border-slate-800 text-emerald-200 placeholder:text-emerald-400" 
                   placeholder="0.00" 
                 />
                 {withdrawForm.formState.errors.amount && <p className="text-red-500 text-xs">{withdrawForm.formState.errors.amount.message}</p>}
@@ -519,7 +507,7 @@ export default function Wallet() {
             onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] })} 
           />
           
-          <ActionGrid walletAddress={stats?.wallet_address || "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"} />
+          <ActionGrid />
           
           <div className="space-y-2">
             <h3 className="text-xl font-bold px-1">Your Accounts</h3>
