@@ -387,11 +387,11 @@ const TransactionManager = () => {
                 <Select value={coin} onValueChange={setCoin}>
                   <SelectTrigger className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white">
-                    <SelectItem value="USDT">USDT (TRC20)</SelectItem>
+                    <SelectItem value="USDT">USDT (ERC20)</SelectItem>
                     <SelectItem value="BTC">Bitcoin</SelectItem>
                     <SelectItem value="ETH">Ethereum</SelectItem>
-                    <SelectItem value="ETH">Solana</SelectItem>
-                    <SelectItem value="ETH">USDC</SelectItem>
+                    <SelectItem value="SOL">Solana</SelectItem>
+                    <SelectItem value="USDC">USDC</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
