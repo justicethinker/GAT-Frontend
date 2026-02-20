@@ -371,7 +371,7 @@ const TransactionManager = () => {
                     <SelectItem value="USDT">USDT (ERC20)</SelectItem>
                     <SelectItem value="BTC">Bitcoin</SelectItem>
                     <SelectItem value="ETH">Ethereum</SelectItem>
-                    <SelectItem value="SOL">Solana</SelectItem>
+                    <SelectItem value="Solana">Solana</SelectItem>
                     <SelectItem value="USDC">USDC</SelectItem>
                   </SelectContent>
                 </Select>
