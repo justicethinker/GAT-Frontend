@@ -98,6 +98,18 @@ const authenticatedFetcher = async (context: { queryKey: readonly unknown[] }) =
 // 3. CUSTOM HOOK: SCANNER LOGIC
 // ──────────────────────────────────────────────────────────────
 
+// ──────────────────────────────────────────────────────────────
+// SCAN HISTORY RECORD TYPE - Records completed scan cycles
+// ──────────────────────────────────────────────────────────────
+interface ScanHistoryRecord {
+  id: string;                    // Unique identifier (timestamp-based)
+  timestamp: string;             // ISO string of when the scan completed
+  opportunityCount: number;      // Total opportunities found in this scan
+  bestProfit: number;            // Best profit percentage from this scan
+  scanDuration: number;          // Duration in seconds (from start to stop)
+  opportunities: Opportunity[];  // All opportunities found in this scan (for detailed view)
+}
+
 function useArbitrageScanner() {
   const { toast } = useToast();
   const [isRunning, setIsRunning] = useState(false);
@@ -107,6 +119,11 @@ function useArbitrageScanner() {
     exchanges: ["BYBIT", "MEXC", "BINANCE"],
     symbols: ["BTCUSDT", "ETHUSDT"]
   });
+  
+  // Scan history tracking: stores array of completed scan records
+  const [scanHistory, setScanHistory] = useState<ScanHistoryRecord[]>([]);
+  // Track when the scan started to calculate duration
+  const [scanStartTime, setScanStartTime] = useState<number | null>(null);
 
   useEffect(() => {
     setIsRunning(true);
@@ -152,13 +169,46 @@ function useArbitrageScanner() {
 //this ensures once if i start the scanner, it will set the Opps array to an empty one.
   const handleToggle = () => {
     if (!isRunning) {
+      // Scanning is about to start: cap history at 10 records, clear current opps, record start time
+      setScanHistory(prev => prev.slice(0, 9)); // Keep only the 9 most recent (about to add 1)
       setFoundOpps([]);
+      setScanStartTime(Date.now());
+    } else {
+      // Scanning is about to stop: save the current scan to history if any opportunities were found
+      if (foundOpps.length > 0 && scanStartTime) {
+        const scanDuration = Math.round((Date.now() - scanStartTime) / 1000);
+        const bestProfit = Math.max(...foundOpps.map(o => o.profit_percent)) * 100;
+        
+        // Create new scan record with all opportunities captured
+        const newRecord: ScanHistoryRecord = {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          opportunityCount: foundOpps.length,
+          bestProfit: Math.round(bestProfit * 100) / 100, // Round to 2 decimal places
+          scanDuration,
+          opportunities: [...foundOpps] // Store all opportunities from this scan
+        };
+        
+        setScanHistory(prev => [newRecord, ...prev]);
+        setScanStartTime(null);
+      }
     }
     setIsRunning(p => !p);
   };
 
 
-  return { isRunning, toggle: () => handleToggle(), minProfit, setMinProfit, foundOpps, filters, setFilters };
+  return { 
+    isRunning, 
+    toggle: () => handleToggle(), 
+    minProfit, 
+    setMinProfit, 
+    foundOpps, 
+    filters, 
+    setFilters,
+    // Scan history state and methods
+    scanHistory,
+    clearScanHistory: () => setScanHistory([])
+  };
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -170,6 +220,9 @@ export default function Arbitrage() {
   const queryClient = useQueryClient();
   const scanner = useArbitrageScanner();
   const [activeWallet, setActiveWallet] = useState<'arb' | 'forex' | 'fut'>('arb');
+  
+  // Track which history items are expanded (store expanded record IDs)
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   // Queries
   const { data: userInfo, isLoading: userLoading } = useQuery<UserInfo>({
@@ -445,6 +498,135 @@ export default function Arbitrage() {
                     </table>
                   </div>
                 </Card>
+
+                {/* ── SCAN HISTORY SECTION ── */}
+                {/* Display historical scan records (one entry per completed scan cycle) with expandable opportunities */}
+                <div className="mt-6 space-y-2">
+                  <div className="flex justify-between items-center px-1">
+                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wide">Scan History</h3>
+                    {/* Clear History button - ghost style, small and subtle */}
+                    {scanner.scanHistory.length > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-7 px-2 text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/5"
+                        onClick={() => scanner.clearScanHistory()}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* History list - scrollable container, max 5-6 visible items */}
+                  <ScrollArea className="h-[500px] border border-gray-800 rounded-lg bg-gray-800/30 p-2">
+                    {scanner.scanHistory.length === 0 ? (
+                      // Empty state: subtle message when no scans have completed yet
+                      <div className="flex items-center justify-center h-24 text-gray-500 text-sm">
+                        Complete a scan to see history.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 pr-3">
+                        {/* Render each scan record from newest to oldest (already sorted) */}
+                        {scanner.scanHistory.map((record) => {
+                          // Format timestamp to readable time (e.g., "2:45 PM" or "15 min ago")
+                          const scanDate = new Date(record.timestamp);
+                          const now = new Date();
+                          const diffMs = now.getTime() - scanDate.getTime();
+                          const diffMins = Math.round(diffMs / 60000);
+                          
+                          let timeDisplay: string;
+                          if (diffMins < 1) timeDisplay = "Just now";
+                          else if (diffMins < 60) timeDisplay = `${diffMins}m ago`;
+                          else if (diffMins < 1440) timeDisplay = `${Math.round(diffMins / 60)}h ago`;
+                          else timeDisplay = scanDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                          // Check if this record is currently expanded
+                          const isExpanded = expandedHistoryId === record.id;
+
+                          return (
+                            <div key={record.id} className="space-y-1">
+                              {/* Clickable header row to toggle expand/collapse */}
+                              <div
+                                onClick={() => setExpandedHistoryId(isExpanded ? null : record.id)}
+                                className="flex justify-between items-center p-3 bg-gray-800/50 rounded border border-gray-700/50 hover:bg-gray-700/50 transition-colors cursor-pointer"
+                              >
+                                {/* Left side: timestamp and opportunity count */}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs text-gray-400">{timeDisplay}</p>
+                                  <p className="text-sm font-medium text-white mt-0.5">
+                                    {record.opportunityCount} opp{record.opportunityCount !== 1 ? 's' : ''}
+                                  </p>
+                                </div>
+                                
+                                {/* Right side: best profit percentage, scan duration, and expand indicator */}
+                                <div className="text-right ml-2 flex items-center gap-3">
+                                  <div>
+                                    <p className="text-sm font-bold text-emerald-400">
+                                      +{record.bestProfit.toFixed(2)}%
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      {record.scanDuration}s
+                                    </p>
+                                  </div>
+                                  {/* Chevron icon to indicate expandable state */}
+                                  <div className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                    </svg>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Expanded opportunities table - only shown when expanded */}
+                              {isExpanded && (
+                                <div className="bg-gray-800/20 border border-gray-700/30 rounded border-t-0 overflow-hidden">
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[700px] text-xs">
+                                      <thead className="bg-gray-950/50 border-b border-gray-700/50">
+                                        <tr>
+                                          <th className="p-2 text-left text-gray-500">Symbol</th>
+                                          <th className="p-2 text-left text-gray-500">Strategy</th>
+                                          <th className="p-2 text-right text-gray-500">Buy/Sell Price</th>
+                                          <th className="p-2 text-right text-gray-500">Profit %</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-700/30">
+                                        {record.opportunities.length === 0 ? (
+                                          <tr>
+                                            <td colSpan={4} className="p-3 text-center text-gray-500 text-xs">
+                                              No opportunities recorded
+                                            </td>
+                                          </tr>
+                                        ) : (
+                                          record.opportunities.map((opp, idx) => (
+                                            <tr key={idx} className="hover:bg-gray-700/30 transition-colors">
+                                              <td className="p-2 font-semibold text-white">{opp.symbol}</td>
+                                              <td className="p-2 text-xs">
+                                                <span className="text-blue-400">{opp.buy_exchange}</span>
+                                                <span className="mx-1 text-gray-600">→</span>
+                                                <span className="text-purple-400">{opp.sell_exchange}</span>
+                                              </td>
+                                              <td className="p-2 text-right font-mono text-gray-300">
+                                                ${opp.buy_price.toFixed(2)} / ${opp.sell_price.toFixed(2)}
+                                              </td>
+                                              <td className="p-2 text-right font-bold text-emerald-400">
+                                                +{(opp.profit_percent * 100).toFixed(2)}%
+                                              </td>
+                                            </tr>
+                                          ))
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
               </TabsContent>
 
               {/* MANUAL TRADE */}
