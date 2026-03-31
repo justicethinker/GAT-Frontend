@@ -109,6 +109,10 @@ function useArbitrageScanner() {
   });
 
   useEffect(() => {
+    setIsRunning(true);
+  }, []);
+
+  useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isRunning) {
       timer = setInterval(() => {
@@ -145,7 +149,16 @@ function useArbitrageScanner() {
     }
   }, [data]);
 
-  return { isRunning, toggle: () => setIsRunning(p => !p), minProfit, setMinProfit, foundOpps, filters, setFilters };
+//this ensures once if i start the scanner, it will set the Opps array to an empty one.
+  const handleToggle = () => {
+    if (!isRunning) {
+      setFoundOpps([]);
+    }
+    setIsRunning(p => !p);
+  };
+
+
+  return { isRunning, toggle: () => handleToggle(), minProfit, setMinProfit, foundOpps, filters, setFilters };
 }
 
 // ──────────────────────────────────────────────────────────────
