@@ -520,8 +520,8 @@ export default function Arbitrage() {
                               <p className="text-xs text-gray-400">{t.buy_exchange} → {t.sell_exchange}</p>
                            </div>
                            <div className="text-right">
-                              <Badge variant="outline" className={t.status === 'COMPLETED' ? 'text-emerald-400 border-emerald-500/30' : 'text-blue-400 border-blue-500/30'}>{t.status}</Badge>
-                              <p className="text-xs font-mono mt-1 text-gray-300">{t.profit_loss ? `$${t.profit_loss}` : '---'}</p>
+                              <Badge variant="outline" className= 'text-emerald-400 border-emerald-500/30'  >Quantity : {t.qty > 0 ? t.qty : '---'}</Badge>
+                              <p className="text-xs font-mono mt-1 text-gray-300">{t.realized_profit? `$${t.realized_profit}` : '---'}</p>
                            </div>
                         </div>
                      ))}
