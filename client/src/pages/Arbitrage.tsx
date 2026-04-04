@@ -104,8 +104,8 @@ function useArbitrageScanner() {
   const [minProfit, setMinProfit] = useState(0.01);
   const [foundOpps, setFoundOpps] = useState<Opportunity[]>([]);
   const [filters, setFilters] = useState({
-    exchanges: ["BYBIT", "MEXC", "BINANCE"],
-    symbols: ["BTCUSDT", "ETHUSDT"]
+    exchanges: ["COINEX", "COINW", "BINGX", "GATEIO", "MEXC", "BINANCE"],
+    symbols: ["BTCUSDT", "ETHUSDT","SOLUSDT"]
   });
 
   useEffect(() => {
