@@ -105,7 +105,7 @@ function useArbitrageScanner() {
   const [foundOpps, setFoundOpps] = useState<Opportunity[]>([]);
 
   const DEFAULT_EXCHANGES = ["COINEX", "COINW", "BINGX", "GATEIO", "MEXC", "BINANCE"];
-  const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "TRXUSDT", "APEUSDT", "DOGEUSDT", "BNBUSDT", "AVAXUSDT", "CAKEUSDT", "DAIUSDT"];
+  const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "TRXUSDT", "APEUSDT", "DOGEUSDT", "BNBUSDT", "AVAXUSDT", "CAKEUSDT"];
 
   const [filters, setFilters] = useState({
     exchanges: DEFAULT_EXCHANGES,
