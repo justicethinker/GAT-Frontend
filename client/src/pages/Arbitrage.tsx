@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 // ──────────────────────────────────────────────────────────────
-// 1. CONFIGURATION & TYPES
+// 1. CONFIGURATION & TYPES 
 // ──────────────────────────────────────────────────────────────
 
 interface Opportunity {
@@ -65,7 +65,7 @@ type TradeFormValues = z.infer<typeof TradeSchema>;
 type WalletFormValues = z.infer<typeof WalletSchema>;
 
 // ──────────────────────────────────────────────────────────────
-// 2. UTILITY: ROBUST FETCHER
+// 2. UTILITY: ROBUST FETCHER FOR AUTHENTICATION
 // ──────────────────────────────────────────────────────────────
 
 const authenticatedFetcher = async (context: { queryKey: readonly unknown[] }) => {
@@ -93,6 +93,7 @@ const authenticatedFetcher = async (context: { queryKey: readonly unknown[] }) =
   }
   return res.json();
 };
+
 
 // ──────────────────────────────────────────────────────────────
 // 3. CUSTOM HOOK: WEBSOCKET SCANNER LOGIC
