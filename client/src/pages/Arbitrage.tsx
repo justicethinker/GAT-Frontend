@@ -107,7 +107,7 @@ function useArbitrageScanner(
   const { toast } = useToast();
 
   const [isRunning, setIsRunning] = useState(false);
-  const [minProfit, setMinProfit] = useState(0.01);
+  const [minProfit, setMinProfit] = useState(0.00001);
   const [foundOpps, setFoundOpps] = useState<Opportunity[]>([]);
   const [isRestarting, setIsRestarting] = useState(false);
 
@@ -126,7 +126,7 @@ function useArbitrageScanner(
   const hasInitializedFilters = useRef(false);
 
   const closeReasonRef = useRef<"manual" | "filter" | "error" | "unmount" | "none">("none");
-  const isFirstFilterRun = useRef(true);
+  // const isFirstFilterRun = useRef(true);
 
   useEffect(() => {
     isRunningRef.current = isRunning;
@@ -228,7 +228,7 @@ function useArbitrageScanner(
 
       const incoming: Opportunity[] = Array.isArray(parsed)
         ? parsed
-        : parsed.opportunities || [];
+        : parsed.data || parsed.oppurtunities || [];
 
       console.log("[WS] Opportunities in message:", incoming.length);
 
