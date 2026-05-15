@@ -235,8 +235,8 @@ function useArbitrageScanner(
       updateCountRef.current += 1;
       console.log("[WS] Message counter:", updateCountRef.current);
 
-      if (updateCountRef.current >= 2) {
-        console.log("[WS] Clearing table after 2 updates.");
+      if (updateCountRef.current >= 3) {
+        console.log("[WS] Clearing table after 3 updates.");
         updateCountRef.current = 0;
         setFoundOpps([]);
         return;
