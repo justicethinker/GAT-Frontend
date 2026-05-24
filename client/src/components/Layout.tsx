@@ -7,7 +7,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-emerald-500/30 flex flex-col">
+    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
       {/* Sticky Header 
         Note: The 'sticky' behavior is defined inside the Header component classes 
       */}

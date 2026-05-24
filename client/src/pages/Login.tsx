@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { notifySuccess, notifyError } from "@/lib/notify";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -37,12 +37,10 @@ export default function Login() {
   const onSubmit = async (data: LoginInput) => {
     setIsLoading(true);
     try {
-      // Prepare form data for OAuth2 standard (x-www-form-urlencoded)
       const formData = new URLSearchParams();
       formData.append("email", data.email);
       formData.append("password", data.password);
 
-      // Use centralized URL builder (use proxy by default)
       const res = await fetch(buildUrl("/auth/token"), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -55,26 +53,20 @@ export default function Login() {
         throw new Error(responseData.detail || responseData.message || "Login failed");
       }
 
-      // Success: Store tokens and role
       if (responseData.access_token) {
         sessionStorage.setItem("token", responseData.access_token);
-
-        // Store admin status if present (matches routes.ts logic)
         if (responseData.isAdmin) {
           sessionStorage.setItem("isAdmin", "true");
         } else {
           sessionStorage.removeItem("isAdmin");
         }
 
-        notifySuccess({ title: "Signed in", description: "Welcome back — redirecting to your dashboard." });
-
-        // Ensure user-info is fresh before navigating
+        notifySuccess({ title: "Signed in", description: "Welcome back." });
         await queryClient.invalidateQueries({ queryKey: ["/auth/user-info"] });
         setLocation("/dashboard");
       }
     } catch (error: any) {
-      console.error("Login error:", error);
-      notifyError({ title: "Sign in failed", description: error.message || "Invalid email or password" });
+      notifyError({ title: "Sign in failed", description: error.message || "Invalid credentials" });
     } finally {
       setIsLoading(false);
     }
@@ -83,26 +75,27 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Effects */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
-      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none"></div>
+      <div className="absolute top-0 right-1/2 translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none"></div>
 
       <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
         <CardHeader className="space-y-2 pb-6">
           <div className="flex items-center justify-center mb-4">
             <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-              <i className="ri-dashboard-line text-emerald-400 text-2xl"></i>
+              <LogIn className="text-emerald-400 w-7 h-7" />
             </div>
           </div>
           <CardTitle className="text-2xl sm:text-3xl text-center text-white font-bold">
-            Welcome Back
+            Sign In
           </CardTitle>
           <CardDescription className="text-center text-gray-400">
-            Sign in to access your GAT dashboard
+            Welcome back to GAT
           </CardDescription>
         </CardHeader>
-
+        
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            
             {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-gray-300 text-sm font-medium ml-1">
@@ -111,7 +104,7 @@ export default function Login() {
               <Input
                 id="email"
                 type="email"
-                autoComplete="username"
+                autoComplete="email"
                 placeholder="trader@example.com"
                 className="h-11 bg-gray-800 border-gray-700 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:ring-emerald-500/20 transition-all"
                 {...register("email")}
@@ -123,15 +116,17 @@ export default function Login() {
 
             {/* Password */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between ml-1">
-                <Label htmlFor="password" className="text-gray-300 text-sm font-medium">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-gray-300 text-sm font-medium ml-1">
                   Password
                 </Label>
-                <Link href="/reset-password" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                <Link
+                  href="/reset-password"
+                  className="text-xs text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4"
+                >
                   Forgot password?
                 </Link>
               </div>
-              
               <div className="relative">
                 <Input
                   id="password"
@@ -149,7 +144,6 @@ export default function Login() {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              
               {errors.password && (
                 <p className="text-xs text-red-400 ml-1">{errors.password.message}</p>
               )}
@@ -162,8 +156,8 @@ export default function Login() {
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Signing in...</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Signing in...</span>
                 </div>
               ) : "Sign In"}
             </Button>
@@ -174,7 +168,7 @@ export default function Login() {
                 href="/register"
                 className="text-emerald-400 hover:text-emerald-300 font-medium hover:underline underline-offset-4"
               >
-                Create Account
+                Create one
               </Link>
             </div>
           </form>

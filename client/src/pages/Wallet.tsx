@@ -77,47 +77,44 @@ const authenticatedFetcher = async (context: { queryKey: readonly unknown[]; sig
       "Content-Type": "application/json",
       ...(token ? { "Authorization": `Bearer ${token}` } : {})
     },
-    signal,
+    signal
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Request failed");
-  }
+  if (!res.ok) throw new Error("Request failed");
   return res.json();
 };
 
-const formatCurrency = (val: number) => 
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+// ──────────────────────────────────────────────────────────────
+// 3. COMPONENTS
+// ──────────────────────────────────────────────────────────────
 
-// ──────────────────────────────────────────────────────────────
-// 3. SUB-COMPONENTS
-// ──────────────────────────────────────────────────────────────
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+};
 
 const PortfolioHeader = ({ stats, onRefresh, isLoading }: { stats?: UserInfo, onRefresh: () => void, isLoading: boolean }) => {
   const totalBalance = (stats?.balance_arb || 0) + (stats?.balance_forex || 0) + (stats?.balance_fut || 0);
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-emerald-900/40 to-slate-900 border border-emerald-500/20 rounded-3xl p-8 sm:p-10 shadow-2xl">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+    <div className="relative overflow-hidden bg-card border border-border rounded-3xl p-8 sm:p-10 shadow-2xl group font-grotesk">
+      <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-105 transition-transform duration-500 pointer-events-none"></div>
       <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
         <div>
-          <p className="text-slate-400 font-medium mb-2 flex items-center gap-2">
+          <p className="text-slate-400 font-semibold mb-2 flex items-center gap-2 text-sm uppercase tracking-wider">
             Total Portfolio Value
-            {isLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+            {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
           </p>
-          <h2 className="text-4xl sm:text-6xl font-bold tracking-tight text-white">
+          <h2 className="text-4xl sm:text-6xl font-700 tracking-tight text-white glow-text">
             {formatCurrency(totalBalance)}
           </h2>
-          <div className="flex items-center gap-3 mt-4">
-            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20">
-              <TrendingUp className="w-3 h-3 mr-1" /> +8.09%
+          <div className="flex items-center gap-3 mt-4 text-xs font-semibold">
+            <Badge className="bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 font-bold px-3 py-1">
+              <TrendingUp className="w-3.5 h-3.5 mr-1" /> +8.09%
             </Badge>
-            <span className="text-slate-500 text-sm">Last 24h</span>
+            <span className="text-slate-500">Last 24h</span>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={onRefresh} className="border-slate-700 bg-slate-800/50 hover:bg-slate-800 text-slate-300">
-          <RefreshCw className={cn("w-4 h-4 mr-2", isLoading && "animate-spin")} /> Refresh
+        <Button variant="outline" size="sm" onClick={onRefresh} className="border-border bg-secondary hover:bg-secondary/80 text-foreground font-bold font-grotesk px-4 py-2 h-10 shadow-md">
+          <RefreshCw className={cn("w-4 h-4 mr-2 text-primary", isLoading && "animate-spin")} /> Refresh
         </Button>
       </div>
     </div>
@@ -156,109 +153,106 @@ const ActionGrid = () => {
     onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" })
   });
 
-  // copyAddress removed — wallet address card was removed per design
-
   return (
     <div className="grid grid-cols-1 gap-6">
       {/* Transfer Card */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-emerald-500/50 transition-all group relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="bg-card border border-border rounded-2xl p-6 cursor-pointer hover:border-primary/45 transition-all group relative overflow-hidden shadow-lg font-grotesk">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-900/20 group-hover:scale-110 transition-transform">
+                <div className="w-12 h-12 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center text-primary shadow-lg shadow-primary/10 group-hover:scale-110 transition-transform duration-300">
                   <ArrowRightLeft className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Transfer Funds</h3>
+                  <h3 className="text-lg font-700 text-white">Transfer Funds</h3>
                   <p className="text-slate-400 text-sm">Move assets between wallets</p>
                 </div>
               </div>
-              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-emerald-400 transition-colors">
+              <div className="w-8 h-8 rounded-full bg-secondary border border-border/60 flex items-center justify-center text-slate-400 group-hover:text-primary group-hover:border-primary/40 transition-all duration-300">
                 <ArrowUpRight className="w-5 h-5" />
               </div>
             </div>
           </div>
         </DialogTrigger>
-        <DialogContent className="bg-slate-900 border-slate-800 text-white">
+        <DialogContent className="glass bg-card border-border text-foreground font-grotesk rounded-xl shadow-2xl max-w-md">
           <DialogHeader>
-            <DialogTitle>Internal Transfer</DialogTitle>
+            <DialogTitle className="font-700 text-white text-lg">Internal Transfer</DialogTitle>
             <DialogDescription className="text-slate-400">
               Move funds instantly between your trading accounts.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4 pt-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>From</Label>
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-350 text-xs">From</Label>
                 <Select onValueChange={(v: any) => setValue("from", v)} defaultValue={watch("from")}>
-                  <SelectTrigger className="bg-slate-950 border-slate-800"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                  <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border text-foreground font-grotesk">
                     <SelectItem value="forex">Forex</SelectItem><SelectItem value="arb">Arbitrage</SelectItem><SelectItem value="fut">Futures</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>To</Label>
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-350 text-xs">To</Label>
                 <Select onValueChange={(v: any) => setValue("to", v)} defaultValue={watch("to")}>
-                  <SelectTrigger className="bg-slate-950 border-slate-800"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                  <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border text-foreground font-grotesk">
                     <SelectItem value="forex">Forex</SelectItem><SelectItem value="arb">Arbitrage</SelectItem><SelectItem value="fut">Futures</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            {errors.to && <p className="text-red-500 text-xs">{errors.to.message}</p>}
+            {errors.to && <p className="text-destructive text-xs">{errors.to.message}</p>}
             
-            <div className="space-y-2">
-              <Label>Amount</Label>
+            <div className="space-y-1.5">
+              <Label className="font-semibold text-slate-350 text-xs">Amount</Label>
               <div className="relative">
                 <Input 
                   type="text" 
                   inputMode="decimal"
                   {...register("amount")} 
-                  className="bg-slate-950 border-slate-800 pl-8 text-white" 
+                  className="bg-secondary border-border text-foreground pl-8 focus:ring-1 focus:ring-primary font-bold font-mono" 
                   placeholder="0.00" 
                   autoComplete="off"
                 />
-                <span className="absolute left-3 top-2.5 text-slate-500">$</span>
+                <span className="absolute left-3 top-2.5 text-slate-500 font-bold">$</span>
               </div>
-              {errors.amount && <p className="text-red-500 text-xs">{errors.amount.message}</p>}
+              {errors.amount && <p className="text-destructive text-xs">{errors.amount.message}</p>}
             </div>
 
-            <Button disabled={mutation.isPending} className="w-full bg-emerald-600 hover:bg-emerald-700">
-              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Transfer"}
+            <Button disabled={mutation.isPending} className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-semibold shadow-lg glow-primary mt-2">
+              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin text-primary-foreground" /> : "Confirm Transfer"}
             </Button>
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Wallet address card removed — deposit addresses are handled in the deposit flow */}
     </div>
   );
 };
 
 const AccountsGrid = ({ stats }: { stats?: UserInfo }) => {
   const accounts = [
-    { name: "Arbitrage Wallet", code: "ARB", balance: stats?.balance_arb || 0, color: "text-purple-400", bg: "bg-purple-500/10" },
-    { name: "Forex Account", code: "FX", balance: stats?.balance_forex || 0, color: "text-blue-400", bg: "bg-blue-500/10" },
-    { name: "Futures Margin", code: "FUT", balance: stats?.balance_fut || 0, color: "text-yellow-400", bg: "bg-yellow-500/10" },
+    { name: "Arbitrage Wallet", code: "ARB", balance: stats?.balance_arb || 0, color: "text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 shadow-[0_0_12px_rgba(34,211,238,0.15)]" },
+    { name: "Forex Account", code: "FX", balance: stats?.balance_forex || 0, color: "text-amber-400 bg-amber-400/10 border border-amber-400/20 shadow-[0_0_12px_rgba(245,158,11,0.15)]" },
+    { name: "Futures Margin", code: "FUT", balance: stats?.balance_fut || 0, color: "text-violet-400 bg-violet-400/10 border border-violet-400/20 shadow-[0_0_12px_rgba(139,92,246,0.15)]" },
   ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {accounts.map((acc) => (
-        <Card key={acc.code} className="bg-slate-900 border-slate-800 p-6 flex flex-col justify-between hover:border-slate-700 transition-colors">
-          <div>
+        <Card key={acc.code} className="bg-card border-border p-6 flex flex-col justify-between hover:border-primary/45 transition-all duration-350 shadow-lg rounded-xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-primary/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-300 pointer-events-none" />
+          <div className="relative font-grotesk">
             <div className="flex justify-between items-start mb-4">
-              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm", acc.bg, acc.color)}>
+              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm", acc.color)}>
                 {acc.code}
               </div>
-              <Badge variant="outline" className="border-slate-700 text-slate-400 font-normal">Active</Badge>
+              <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">Active</Badge>
             </div>
-            <p className="text-slate-400 text-sm font-medium">{acc.name}</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{formatCurrency(acc.balance)}</h3>
+            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">{acc.name}</p>
+            <h3 className="text-2xl font-700 text-white mt-2 font-mono">{formatCurrency(acc.balance)}</h3>
           </div>
         </Card>
       ))}
@@ -347,27 +341,25 @@ const TransactionManager = () => {
   });
 
   return (
-    <Card className="lg:col-span-2 bg-slate-900 border-slate-800 p-6">
-      <Tabs defaultValue="deposit" className="w-full">
+    <Card className="lg:col-span-2 bg-card border-border p-6 rounded-xl shadow-lg relative overflow-hidden group">
+      <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-primary/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-105 transition-transform duration-500 pointer-events-none" />
+      <Tabs defaultValue="deposit" className="w-full relative font-grotesk">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Transactions</h2>
-          <TabsList className="bg-slate-950 border border-slate-800">
-            <TabsTrigger value="deposit" className="w-24">Deposit</TabsTrigger>
-            <TabsTrigger value="withdraw" className="w-24">Withdraw</TabsTrigger>
+          <h2 className="text-xl font-bold text-white leading-none">Transactions</h2>
+          <TabsList className="bg-secondary border border-border p-1 rounded-xl">
+            <TabsTrigger value="deposit" className="w-24 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold">Deposit</TabsTrigger>
+            <TabsTrigger value="withdraw" className="w-24 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold">Withdraw</TabsTrigger>
           </TabsList>
         </div>
-
-
-        
 
         <TabsContent value="deposit" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-emerald-200">Asset</Label>
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-350 text-xs">Asset</Label>
                 <Select value={coin} onValueChange={setCoin}>
-                  <SelectTrigger className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white">
+                  <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border text-foreground font-grotesk">
                     <SelectItem value="USDT">USDT (ERC20)</SelectItem>
                     <SelectItem value="BTC">Bitcoin</SelectItem>
                     <SelectItem value="ETH">Ethereum</SelectItem>
@@ -376,8 +368,8 @@ const TransactionManager = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-emerald-200">Amount</Label>
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-355 text-xs">Amount</Label>
                 <Input 
                   type="text"
                   inputMode="decimal"
@@ -386,40 +378,40 @@ const TransactionManager = () => {
                     const val = e.target.value;
                     if (val === '' || /^\d*\.?\d*$/.test(val)) setDepositAmount(val);
                   }} 
-                  className="bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg text-white" 
+                  className="bg-secondary border-border text-foreground focus:ring-1 focus:ring-primary font-bold font-mono" 
                   placeholder="0.00" 
                 />
               </div>
-              <div className="p-4 bg-slate-950/50 border border-slate-800 rounded-xl flex items-center justify-between">
+              <div className="p-4 bg-secondary/35 border border-border/70 rounded-xl flex items-center justify-between shadow-sm">
                 <div className="text-xs">
-                  <p className="text-slate-500 uppercase font-bold">Deposit Address</p>
-                  <p className="text-emerald-400 font-mono mt-1 break-all">
-  {addressLoading
-    ? "Loading..."
-    : selectedAddress || "No address available"}
-</p>
+                  <p className="text-slate-500 uppercase font-bold tracking-wider">Deposit Address</p>
+                  <p className="text-primary font-mono font-semibold mt-2 break-all max-w-[200px] sm:max-w-xs">
+                    {addressLoading
+                      ? "Loading..."
+                      : selectedAddress || "No address available"}
+                  </p>
                 </div>
-                <Button size="sm" variant="ghost" className="h-8 text-emerald-300" onClick={() => {
+                <Button size="sm" variant="ghost" className="h-8 text-primary hover:bg-secondary" onClick={() => {
                   if (selectedAddress) {
                     navigator.clipboard.writeText(selectedAddress);
                     toast({ title: "Copied", description: "Deposit address copied to clipboard." });
                   }
                 }}>
-                  <Copy className="w-3 h-3" />
+                  <Copy className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </div>
             
             <div className="space-y-2">
-              <Label className="text-emerald-200">Proof of Payment</Label>
-              <label className="flex flex-col items-center justify-center w-full h-40 border border-emerald-500/20 border-dashed rounded-xl cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 transition-all duration-200 group">
+              <Label className="font-semibold text-slate-350 text-xs">Proof of Payment</Label>
+              <label className="flex flex-col items-center justify-center w-full h-40 border border-border border-dashed rounded-xl cursor-pointer bg-secondary/20 hover:bg-secondary/40 transition-all group shadow-sm">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <UploadCloud className="w-8 h-8 mb-3 text-emerald-400" />
-                  <p className="text-sm text-emerald-200">{receipt ? receipt.name : "Click to upload image"}</p>
+                  <UploadCloud className="w-8 h-8 mb-3 text-primary glow-text" />
+                  <p className="text-sm text-slate-300 font-semibold">{receipt ? receipt.name : "Click to upload proof file"}</p>
                 </div>
                 <input type="file" className="hidden" onChange={e => setReceipt(e.target.files?.[0] || null)} />
               </label>
-              <Button disabled={depositMutation.isPending} onClick={() => depositMutation.mutate()} className="w-full bg-emerald-600 hover:bg-emerald-700 mt-2">
+              <Button disabled={depositMutation.isPending} onClick={() => depositMutation.mutate()} className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-bold shadow-lg glow-primary mt-3 py-6 rounded-xl transition-all">
                 {depositMutation.isPending ? "Uploading..." : "Submit Deposit"}
               </Button>
             </div>
@@ -428,36 +420,37 @@ const TransactionManager = () => {
 
         <TabsContent value="withdraw" className="space-y-6">
           <form onSubmit={withdrawForm.handleSubmit((d) => withdrawMutation.mutate(d))} className="space-y-4 max-w-md mx-auto">
-             <div className="space-y-2">
-                <Label className="text-emerald-200">Currency</Label>
+             <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-350 text-xs">Currency</Label>
                 <Select onValueChange={v => withdrawForm.setValue("currency", v)} defaultValue="USDT">
-                  <SelectTrigger className="bg-slate-950 border-slate-800 text-emerald-200"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-emerald-200">
-                    <SelectItem value="USDT" className="text-emerald-400">USDT</SelectItem><SelectItem value="BTC" className="text-yellow-400">BTC</SelectItem>
+                  <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border text-foreground font-grotesk">
+                    <SelectItem value="USDT" className="text-primary font-bold">USDT</SelectItem>
+                    <SelectItem value="BTC" className="text-warning font-bold">BTC</SelectItem>
                   </SelectContent>
                 </Select>
              </div>
-             <div className="space-y-2">
-               <Label className="text-emerald-200">Wallet Address</Label>
-               <Input {...withdrawForm.register("address")} className="bg-slate-950 border-slate-800 text-emerald-200 placeholder:text-emerald-400" placeholder="0x..." />
-               {withdrawForm.formState.errors.address && <p className="text-red-500 text-xs">{withdrawForm.formState.errors.address.message}</p>}
+             <div className="space-y-1.5">
+               <Label className="font-semibold text-slate-350 text-xs">Wallet Address</Label>
+               <Input {...withdrawForm.register("address")} className="bg-secondary border-border text-foreground focus:ring-1 focus:ring-primary font-bold font-mono" placeholder="0x..." />
+               {withdrawForm.formState.errors.address && <p className="text-destructive text-xs">{withdrawForm.formState.errors.address.message}</p>}
              </div>
-             <div className="space-y-2">
-                <Label className="text-emerald-200">Amount</Label>
+             <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-350 text-xs">Amount</Label>
                 <Input 
                   type="text"
                   inputMode="decimal"
                   {...withdrawForm.register("amount")} 
-                  className="bg-slate-950 border-slate-800 text-emerald-200 placeholder:text-emerald-400" 
+                  className="bg-secondary border-border text-foreground focus:ring-1 focus:ring-primary font-bold font-mono" 
                   placeholder="0.00" 
                 />
-                {withdrawForm.formState.errors.amount && <p className="text-red-500 text-xs">{withdrawForm.formState.errors.amount.message}</p>}
+                {withdrawForm.formState.errors.amount && <p className="text-destructive text-xs">{withdrawForm.formState.errors.amount.message}</p>}
              </div>
-             <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg flex gap-3 items-start">
-               <AlertCircle className="w-5 h-5 text-yellow-500 shrink-0" />
-               <p className="text-xs text-yellow-200/80">Withdrawals are processed manually. Please allow up to 24 hours.</p>
+             <div className="bg-warning/10 border border-warning/20 p-3.5 rounded-xl flex gap-3 items-start">
+               <AlertCircle className="w-5 h-5 text-warning shrink-0" />
+               <p className="text-xs text-warning/80">Withdrawals are processed manually. Please allow up to 24 hours.</p>
              </div>
-             <Button disabled={withdrawMutation.isPending} className="w-full bg-red-600 hover:bg-red-700">
+             <Button disabled={withdrawMutation.isPending} className="w-full bg-destructive hover:bg-destructive/95 text-destructive-foreground font-bold shadow-lg mt-3 py-6 rounded-xl transition-all">
                {withdrawMutation.isPending ? "Processing..." : "Confirm Withdraw"}
              </Button>
           </form>
@@ -498,7 +491,7 @@ export default function Wallet() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-slate-950 text-white pb-20">
+      <div className="min-h-screen bg-background text-foreground pb-20 font-sans">
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
           
           <PortfolioHeader 
@@ -509,8 +502,8 @@ export default function Wallet() {
           
           <ActionGrid />
           
-          <div className="space-y-2">
-            <h3 className="text-xl font-bold px-1">Your Accounts</h3>
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold px-1 font-grotesk text-white leading-none">Your Accounts</h3>
             <AccountsGrid stats={stats} />
           </div>
 
@@ -518,31 +511,32 @@ export default function Wallet() {
             <TransactionManager />
             
             {/* Convert Card (Future Feature) */}
-            <Card className="bg-slate-900 border-slate-800 p-6 flex flex-col">
-               <h2 className="text-lg font-bold mb-4 text-emerald-200">Quick Convert</h2>
-               <div className="flex-1 flex flex-col justify-center space-y-4 opacity-50 pointer-events-none">
-                  <div className="p-4 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-emerald-400 mb-1">From</p>
-                    <div className="flex justify-between font-bold text-emerald-200"><span>USDT</span><span>0.00</span></div>
+            <Card className="bg-card border-border p-6 flex flex-col rounded-xl shadow-lg relative overflow-hidden group">
+               <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-primary/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-300 pointer-events-none" />
+               <h2 className="text-lg font-bold mb-4 text-white relative font-grotesk leading-none">Quick Convert</h2>
+               <div className="flex-1 flex flex-col justify-center space-y-4 opacity-50 pointer-events-none relative font-grotesk">
+                  <div className="p-4 border border-border/80 rounded-xl bg-secondary/35">
+                    <p className="text-xs text-primary font-semibold mb-1 uppercase tracking-wider">From</p>
+                    <div className="flex justify-between font-bold text-white font-mono"><span>USDT</span><span>0.00</span></div>
                   </div>
-                  <div className="flex justify-center"><ArrowDownLeft className="w-5 h-5 text-slate-600" /></div>
-                  <div className="p-4 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-emerald-400 mb-1">To</p>
-                    <div className="flex justify-between font-bold text-emerald-200"><span>BTC</span><span>0.00</span></div>
+                  <div className="flex justify-center"><ArrowDownLeft className="w-5 h-5 text-slate-500" /></div>
+                  <div className="p-4 border border-border/80 rounded-xl bg-secondary/35">
+                    <p className="text-xs text-primary font-semibold mb-1 uppercase tracking-wider">To</p>
+                    <div className="flex justify-between font-bold text-white font-mono"><span>BTC</span><span>0.00</span></div>
                   </div>
-                  <Button className="w-full bg-slate-800">Coming Soon</Button>
+                  <Button className="w-full bg-secondary border border-border text-slate-450 rounded-xl py-6 font-bold text-sm">Coming Soon</Button>
                </div>
             </Card>
           </div>
 
           {/* History Table */}
-          <Card className="bg-slate-900 border-slate-800 overflow-hidden">
-            <div className="p-6 border-b border-slate-800">
-              <h3 className="font-bold text-lg text-emerald-200">Transaction History</h3>
+          <Card className="bg-card border-border overflow-hidden rounded-xl shadow-lg">
+            <div className="p-6 border-b border-border font-grotesk">
+              <h3 className="font-bold text-lg text-white leading-none">Transaction History</h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-950 text-xs uppercase text-slate-500 font-semibold">
+              <table className="w-full text-left font-grotesk">
+                <thead className="bg-secondary/20 border-b border-border/50 text-[10px] uppercase text-slate-400 font-bold tracking-wider">
                   <tr>
                     <th className="p-4">Type</th>
                     <th className="p-4">Amount</th>
@@ -550,18 +544,18 @@ export default function Wallet() {
                     <th className="p-4">Date</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800 text-sm">
+                <tbody className="divide-y divide-border/50 text-sm">
                   {history.length === 0 ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-slate-500">No transactions found.</td></tr>
+                    <tr><td colSpan={4} className="p-8 text-center text-slate-500 font-semibold">No transactions found.</td></tr>
                   ) : (
                     history.slice(0, 10).map((tx, i) => (
-                      <tr key={i} className="hover:bg-slate-800/50">
+                      <tr key={i} className="hover:bg-secondary/20 transition-colors">
                         <td className="p-4 font-bold">
-                          <span className={tx.type === 'Deposit' ? "text-emerald-400" : "text-slate-300"}>{tx.type}</span>
+                          <span className={tx.type === 'Deposit' ? "text-primary glow-text" : "text-slate-300"}>{tx.type}</span>
                         </td>
-                        <td className="p-4 font-mono text-white">{tx.amount} {tx.currency}</td>
-                        <td className="p-4"><Badge variant="outline" className="text-[10px] border-slate-700 text-slate-400">{tx.status}</Badge></td>
-                        <td className="p-4 text-slate-500">{new Date(tx.created_at).toLocaleDateString()}</td>
+                        <td className="p-4 font-mono text-white font-semibold">{tx.amount} {tx.currency}</td>
+                        <td className="p-4"><Badge className="bg-secondary border border-border text-[9px] font-bold text-slate-400 uppercase tracking-wider">{tx.status}</Badge></td>
+                        <td className="p-4 text-slate-500 font-mono text-xs">{new Date(tx.created_at).toLocaleDateString()}</td>
                       </tr>
                     ))
                   )}

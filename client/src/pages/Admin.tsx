@@ -614,7 +614,7 @@ const Admin = () => {
   return (
     <>
       <style>{scrollbarStyles}</style>
-      <div className="min-h-screen bg-gray-950 font-sans text-gray-100 flex relative">
+      <div className="min-h-screen bg-gradient-to-b from-[#080D14] to-[#0C1E2A] font-sans text-gray-100 flex relative backdrop-blur-md">
         
         {/* --- RESTART OVERLAY --- */}
         {isRestarting && (
