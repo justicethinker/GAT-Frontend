@@ -21,9 +21,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Arbitrage = lazy(() => import("@/pages/Arbitrage"));
 const Forex = lazy(() => import("@/pages/Forex"));
 const Futures = lazy(() => import("@/pages/Futures"));
-const Wallet = lazy(() =>
-  import("@/pages/Wallet").then((mod) => ({ default: (mod as any).default ?? (mod as any).Wallet }))
-);
+const Wallet = lazy(() => import("@/pages/Wallet" ));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const Settings = lazy(() => import("@/pages/Settings"));
