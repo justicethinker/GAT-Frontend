@@ -56,17 +56,18 @@ const authenticatedFetcher = async <T,>(context: { queryKey: readonly unknown[] 
 
 const StatCard = ({ label, value, subValue, icon: Icon, colorClass }: any) => (
   <div className={cn(
-    "relative overflow-hidden rounded-2xl p-6 border transition-all duration-300 hover:shadow-lg group bg-slate-900/50 backdrop-blur-sm",
+    "relative overflow-hidden rounded-xl p-6 border transition-all duration-300 shadow-md hover:shadow-lg group bg-card border-border hover:border-primary/45",
     colorClass
   )}>
+    <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-primary/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-300 pointer-events-none" />
     <div className="flex justify-between items-start z-10 relative">
       <div>
-        <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">{label}</p>
-        <h3 className="text-3xl font-bold text-white mt-2">{value}</h3>
-        {subValue && <div className="mt-2">{subValue}</div>}
+        <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider font-grotesk">{label}</p>
+        <h3 className="text-3xl font-bold text-white mt-2 font-grotesk leading-none">{value}</h3>
+        {subValue && <div className="mt-2 font-sans">{subValue}</div>}
       </div>
-      <div className="p-3 bg-white/5 rounded-xl border border-white/5 group-hover:scale-110 transition-transform">
-        <Icon className="w-6 h-6 text-white/80" />
+      <div className="p-3 bg-primary/10 rounded-xl border border-primary/20 group-hover:scale-110 transition-transform text-primary">
+        <Icon className="w-6 h-6" />
       </div>
     </div>
   </div>
@@ -74,12 +75,12 @@ const StatCard = ({ label, value, subValue, icon: Icon, colorClass }: any) => (
 
 const ProfileSkeleton = () => (
   <div className="w-full max-w-6xl mx-auto px-4 py-8 animate-pulse">
-    <div className="h-48 bg-slate-800 rounded-t-3xl w-full mb-20 relative">
-        <div className="absolute -bottom-16 left-8 w-32 h-32 bg-slate-700 rounded-full border-4 border-slate-900"></div>
+    <div className="h-48 bg-secondary/40 rounded-t-3xl w-full mb-20 relative">
+        <div className="absolute -bottom-16 left-8 w-32 h-32 bg-secondary/60 rounded-full border-4 border-background"></div>
     </div>
     <div className="space-y-4 max-w-lg mx-auto text-center mt-20">
-      <div className="h-8 w-48 bg-slate-800 rounded mx-auto" />
-      <div className="h-4 w-32 bg-slate-800 rounded mx-auto" />
+      <div className="h-8 w-48 bg-secondary/50 rounded mx-auto" />
+      <div className="h-4 w-32 bg-secondary/40 rounded mx-auto" />
     </div>
   </div>
 );
@@ -185,8 +186,8 @@ export default function Profile() {
     reset();
   };
 
-  if (isUserLoading) return <div className="min-h-screen bg-slate-950"><Header /><ProfileSkeleton /></div>;
-  if (!user) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400">Error loading profile.</div>;
+  if (isUserLoading) return <div className="min-h-screen bg-background"><Header /><ProfileSkeleton /></div>;
+  if (!user) return <div className="min-h-screen bg-background flex items-center justify-center text-red-400">Error loading profile.</div>;
 
   const displayStats = stats || {
     totalBalance: '$0.00', todayPnL: '$0.00', todayPnLPercent: '0%', 
@@ -194,18 +195,18 @@ export default function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-teal-500/30">
+    <div className="min-h-screen bg-background text-white font-sans selection:bg-primary/30">
       <Header />
 
       <div className="w-full max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         
         {/* Profile Card */}
-        <div className="relative bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl mb-12 group/card">
+        <div className="relative bg-card border border-border rounded-xl overflow-hidden shadow-2xl mb-12 group/card">
           
           {/* Banner */}
-          <div className="h-40 sm:h-52 w-full bg-gradient-to-r from-teal-900 via-slate-900 to-blue-900 relative overflow-hidden">
-             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20" />
-             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+          <div className="h-40 sm:h-52 w-full bg-gradient-to-r from-primary/20 via-card to-primary/5 relative overflow-hidden">
+             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none" />
+             <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent pointer-events-none" />
           </div>
 
           <div className="px-6 pb-8 sm:px-10">
@@ -213,7 +214,7 @@ export default function Profile() {
               
               {/* Avatar Section */}
               <div className="relative -mt-20 mb-6 sm:mb-0 sm:mr-8 flex-shrink-0 z-10 mx-auto sm:mx-0">
-                <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-slate-900 bg-slate-800 shadow-xl overflow-hidden group/avatar">
+                <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-card bg-secondary shadow-xl overflow-hidden group/avatar">
                   <img
                     src={avatarPreview || user.avatar || 'https://github.com/shadcn.png'}
                     alt={user.name}
@@ -223,7 +224,7 @@ export default function Profile() {
                   {isEditing && (
                     <label className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-200">
                       <Camera className="w-8 h-8 text-white mb-1" />
-                      <span className="text-xs font-medium text-white">Change</span>
+                      <span className="text-xs font-semibold text-white">Change</span>
                       <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
                     </label>
                   )}
@@ -240,7 +241,7 @@ export default function Profile() {
                         <div>
                           <input
                             {...register('name')}
-                            className={cn("w-full bg-slate-800 border rounded-lg px-3 py-2 text-lg font-bold focus:ring-2 focus:ring-teal-500 outline-none transition-all", errors.name ? "border-red-500" : "border-slate-700")}
+                            className={cn("w-full bg-secondary/40 border rounded-xl px-4 py-2.5 text-lg font-bold text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/30 outline-none transition-all font-grotesk", errors.name ? "border-red-500" : "border-border/80")}
                             placeholder="Display Name"
                           />
                           {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name.message}</p>}
@@ -250,40 +251,40 @@ export default function Profile() {
                           <textarea
                             {...register('bio')}
                             rows={3}
-                            className={cn("w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all resize-none", errors.bio ? "border-red-500" : "border-slate-700")}
+                            className={cn("w-full bg-secondary/40 border rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/30 outline-none transition-all resize-none", errors.bio ? "border-red-500" : "border-border/80")}
                             placeholder="Tell us about your trading strategy..."
                           />
                           {errors.bio && <p className="text-red-400 text-xs mt-1">{errors.bio.message}</p>}
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                           <input {...register('location')} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none" placeholder="Location" />
-                           <input {...register('website')} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none" placeholder="Website URL" />
+                           <input {...register('location')} className="bg-secondary/40 border border-border/80 rounded-xl px-4 py-2 text-sm text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/30 outline-none" placeholder="Location" />
+                           <input {...register('website')} className="bg-secondary/40 border border-border/80 rounded-xl px-4 py-2 text-sm text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/30 outline-none" placeholder="Website URL" />
                         </div>
                       </form>
                     ) : (
                       <div className="text-center sm:text-left">
-                        <h1 className="text-3xl font-bold text-white">{user.name || 'User'}</h1>
-                        <p className="text-teal-400 font-medium text-lg">@{user.username || 'trader'}</p>
-                        <p className="mt-4 text-slate-300 leading-relaxed max-w-2xl mx-auto sm:mx-0">
+                        <h1 className="text-3xl font-bold text-white font-grotesk">{user.name || 'User'}</h1>
+                        <p className="text-primary font-semibold text-lg font-grotesk">@{user.username || 'trader'}</p>
+                        <p className="mt-4 text-slate-350 leading-relaxed max-w-2xl mx-auto sm:mx-0">
                           {user.bio || "No bio provided."}
                         </p>
                         
                         <div className="mt-6 flex flex-wrap items-center justify-center sm:justify-start gap-y-2 gap-x-6 text-sm text-slate-400">
                           <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-teal-500" />
+                            <Mail className="w-4 h-4 text-primary" />
                             <span>{user.email}</span>
                           </div>
                           {user.location && (
                             <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-teal-500" />
+                              <MapPin className="w-4 h-4 text-primary" />
                               <span>{user.location}</span>
                             </div>
                           )}
                           {user.website && (
                             <div className="flex items-center gap-2">
-                              <Link2 className="w-4 h-4 text-teal-500" />
-                              <a href={user.website} target="_blank" rel="noreferrer" className="hover:text-teal-300 transition-colors underline decoration-slate-700 underline-offset-4">
+                              <Link2 className="w-4 h-4 text-primary" />
+                              <a href={user.website} target="_blank" rel="noreferrer" className="hover:text-primary transition-colors underline decoration-border underline-offset-4">
                                 {user.website.replace(/^https?:\/\//, '')}
                               </a>
                             </div>
@@ -301,7 +302,7 @@ export default function Profile() {
                           type="button"
                           onClick={onCancel}
                           disabled={mutation.isPending}
-                          className="px-4 py-2 rounded-xl border border-slate-600 hover:bg-slate-800 text-slate-300 transition-colors flex items-center gap-2 text-sm font-medium"
+                          className="px-4 py-2 rounded-xl border border-border hover:bg-secondary/50 text-slate-300 transition-colors flex items-center gap-2 text-sm font-semibold font-grotesk"
                         >
                           <X className="w-4 h-4" /> Cancel
                         </button>
@@ -309,7 +310,7 @@ export default function Profile() {
                           type="submit"
                           form="profile-form"
                           disabled={mutation.isPending}
-                          className="px-6 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-900/20 transition-all flex items-center gap-2 text-sm font-bold disabled:opacity-70 disabled:cursor-not-allowed"
+                          className="px-6 py-2 rounded-xl bg-primary hover:bg-primary/90 text-background shadow-lg transition-all flex items-center gap-2 text-sm font-bold disabled:opacity-70 disabled:cursor-not-allowed font-grotesk"
                         >
                           {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                           Save Changes
@@ -318,9 +319,9 @@ export default function Profile() {
                     ) : (
                       <button
                         onClick={() => setIsEditing(true)}
-                        className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white transition-all flex items-center gap-2 text-sm font-medium group"
+                        className="px-5 py-2.5 rounded-xl bg-secondary border border-border text-white hover:bg-secondary/80 transition-all flex items-center gap-2 text-sm font-semibold group font-grotesk"
                       >
-                        <Edit3 className="w-4 h-4 text-teal-500 group-hover:text-teal-400" />
+                        <Edit3 className="w-4 h-4 text-primary group-hover:text-primary" />
                         Edit Profile
                       </button>
                     )}
@@ -337,25 +338,25 @@ export default function Profile() {
             label="Total Balance"
             value={displayStats.totalBalance}
             icon={Wallet}
-            colorClass="border-teal-500/20 from-teal-500/10 to-transparent hover:border-teal-500/40"
-            subValue={<span className="text-emerald-400 text-sm font-medium">+12.5% vs last month</span>}
+            colorClass="border-primary/25 from-primary/10 to-transparent"
+            subValue={<span className="text-primary text-sm font-semibold font-grotesk glow-text">+12.5% vs last month</span>}
           />
           
           <StatCard
             label="Today's P&L"
             value={displayStats.todayPnL}
             icon={TrendingUp}
-            colorClass="border-emerald-500/20 from-emerald-500/10 to-transparent hover:border-emerald-500/40"
-            subValue={<span className="text-emerald-400 text-sm font-medium">+{displayStats.todayPnLPercent}</span>}
+            colorClass="border-primary/25 from-primary/10 to-transparent"
+            subValue={<span className="text-primary text-sm font-semibold font-grotesk glow-text">+{displayStats.todayPnLPercent}</span>}
           />
 
           <StatCard
             label="Active Trades"
             value={displayStats.activeTrades}
             icon={Activity}
-            colorClass="border-blue-500/20 from-blue-500/10 to-transparent hover:border-blue-500/40"
+            colorClass="border-primary/25 from-primary/10 to-transparent"
             subValue={
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-300">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 font-grotesk">
                 +{displayStats.newTrades} new
               </span>
             }
@@ -365,11 +366,11 @@ export default function Profile() {
             label="Win Rate"
             value={displayStats.winRate}
             icon={Trophy}
-            colorClass="border-yellow-500/20 from-yellow-500/10 to-transparent hover:border-yellow-500/40"
+            colorClass="border-primary/25 from-primary/10 to-transparent"
             subValue={
-              <div className="w-full bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
+              <div className="w-full bg-secondary/50 h-1.5 rounded-full mt-2 overflow-hidden border border-border/30">
                 <div 
-                  className="bg-gradient-to-r from-yellow-500 to-amber-600 h-full rounded-full" 
+                  className="bg-primary h-full rounded-full glow-primary" 
                   style={{ width: `${displayStats.winRateValue}%` }} 
                 />
               </div>

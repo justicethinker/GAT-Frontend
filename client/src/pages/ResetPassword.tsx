@@ -36,12 +36,12 @@ type ResetInput = z.infer<typeof resetSchema>;
 export default function ResetPassword() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+
   // State
   const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  
+
   // Toggle Visibility
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -55,7 +55,6 @@ export default function ResetPassword() {
   const onSendOTP = async (data: EmailInput) => {
     setIsLoading(true);
     try {
-      // POST /auth/otp-resend (or /auth/forgot-password)
       const res = await fetch(buildUrl("/auth/otp-resend"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,14 +80,13 @@ export default function ResetPassword() {
   const onResetSubmit = async (data: ResetInput) => {
     setIsLoading(true);
     try {
-      // POST /auth/reset-password
       const res = await fetch(buildUrl("/auth/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          email: userEmail, 
-          otp: data.otp, 
-          newPassword: data.password 
+        body: JSON.stringify({
+          email: userEmail,
+          otp: data.otp,
+          newPassword: data.password,
         }),
       });
 
@@ -103,7 +101,6 @@ export default function ResetPassword() {
         description: "Password reset! You can now login.",
         className: "bg-emerald-600 text-white border-emerald-700",
       });
-      
       setLocation("/login");
     } catch (error: any) {
       toast({
@@ -116,18 +113,17 @@ export default function ResetPassword() {
     }
   };
 
-  // Background UI
+  // Background decorative effects
   const BackgroundEffects = () => (
     <>
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
-      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none"></div>
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none" />
     </>
   );
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-[#080D14] to-[#0C1E2A] flex items-center justify-center p-4 relative overflow-hidden">
       <BackgroundEffects />
-      
       <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur-sm border-gray-800 shadow-2xl relative z-10">
         <CardHeader className="space-y-2 pb-6">
           <div className="flex items-center justify-center mb-4">
@@ -143,13 +139,11 @@ export default function ResetPassword() {
             {step === 1 ? "Reset Password" : "Secure Account"}
           </CardTitle>
           <CardDescription className="text-center text-gray-400">
-            {step === 1 
-              ? "Enter your email to receive a verification code" 
-              : `Enter the code sent to ${userEmail}`
-            }
+            {step === 1
+              ? "Enter your email to receive a verification code"
+              : `Enter the code sent to ${userEmail}`}
           </CardDescription>
         </CardHeader>
-
         <CardContent>
           {/* STEP 1: REQUEST OTP */}
           {step === 1 && (
@@ -169,7 +163,6 @@ export default function ResetPassword() {
                   <p className="text-xs text-red-400 ml-1">{emailForm.formState.errors.email.message}</p>
                 )}
               </div>
-
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -177,9 +170,8 @@ export default function ResetPassword() {
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send Verification Code"}
               </Button>
-
               <div className="pt-2 text-center text-sm text-gray-400">
-                Remember your password?{" "}
+                Remember your password?{' '}
                 <Link href="/login" className="text-emerald-400 hover:underline">
                   Sign in
                 </Link>
@@ -208,7 +200,9 @@ export default function ResetPassword() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="pass" className="text-gray-300 text-sm font-medium ml-1">New Password</Label>
+                <Label htmlFor="pass" className="text-gray-300 text-sm font-medium ml-1">
+                  New Password
+                </Label>
                 <div className="relative">
                   <Input
                     id="pass"
@@ -217,8 +211,12 @@ export default function ResetPassword() {
                     placeholder="••••••••"
                     {...resetForm.register("password")}
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 hover:text-white">
-                    {showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-white"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
                 {resetForm.formState.errors.password && (
@@ -227,7 +225,9 @@ export default function ResetPassword() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="conf" className="text-gray-300 text-sm font-medium ml-1">Confirm Password</Label>
+                <Label htmlFor="conf" className="text-gray-300 text-sm font-medium ml-1">
+                  Confirm Password
+                </Label>
                 <div className="relative">
                   <Input
                     id="conf"
@@ -236,8 +236,12 @@ export default function ResetPassword() {
                     placeholder="••••••••"
                     {...resetForm.register("confirmPassword")}
                   />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-3 text-gray-400 hover:text-white">
-                    {showConfirm ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-white"
+                  >
+                    {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
                 {resetForm.formState.errors.confirmPassword && (
@@ -252,7 +256,6 @@ export default function ResetPassword() {
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reset Password"}
               </Button>
-
               <button
                 type="button"
                 onClick={() => setStep(1)}

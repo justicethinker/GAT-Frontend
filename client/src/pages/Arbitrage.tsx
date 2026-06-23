@@ -235,8 +235,8 @@ function useArbitrageScanner(
       updateCountRef.current += 1;
       console.log("[WS] Message counter:", updateCountRef.current);
 
-      if (updateCountRef.current >= 5) {
-        console.log("[WS] Clearing table after 5 updates.");
+      if (updateCountRef.current >= 3) {
+        console.log("[WS] Clearing table after 3 updates.");
         updateCountRef.current = 0;
         setFoundOpps([]);
         return;
@@ -566,32 +566,33 @@ export default function Arbitrage() {
 
   return (
     <Layout>
-      <div className="w-full min-h-screen bg-gray-950 px-4 py-6 space-y-6">
+      <div className="w-full min-h-screen bg-background px-4 py-6 space-y-6">
 
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-900 p-6 rounded-xl border border-gray-800 shadow-lg">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-xl border border-border shadow-lg font-grotesk relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-primary/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-105 transition-transform duration-500" />
+          <div className="relative">
+            <h1 className="text-2xl font-700 text-white flex items-center gap-3">
               Arbitrage Scanner
               {scanner.isRunning && !scanner.isRestarting && (
-                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 animate-pulse">
+                <Badge className="bg-primary/10 text-primary border-primary/20 animate-pulse font-bold shadow-sm glow-primary">
                   Scanning @ {(scanner.minProfit * 100).toFixed(3)}%
                 </Badge>
               )}
             </h1>
-            <p className="text-gray-400 text-sm mt-1">Real-time cross-exchange opportunity detector.</p>
+            <p className="text-slate-400 text-xs mt-1">Real-time cross-exchange opportunity detector.</p>
           </div>
 
-          <div className="flex gap-3 w-full md:w-auto">
+          <div className="flex gap-3 w-full md:w-auto relative">
 
             {/* Mobile filter sheet (hidden on desktop) */}
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" className="lg:hidden border-gray-700 text-gray-300">
-                  <Filter className="w-4 h-4 mr-2" /> Filters
+                <Button variant="outline" className="lg:hidden border-border bg-secondary text-slate-300 hover:bg-secondary/80">
+                  <Filter className="w-4 h-4 mr-2 text-primary" /> Filters
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="bg-gray-900 border-gray-800 text-white">
+              <SheetContent side="left" className="bg-card border-border text-foreground font-grotesk">
                 <SheetHeader className="mb-4">
                   <SheetTitle className="text-white">Scanner Filters</SheetTitle>
                 </SheetHeader>
@@ -615,8 +616,8 @@ export default function Arbitrage() {
               onClick={scanner.toggle}
               className={
                 scanner.isRunning
-                  ? "bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/50"
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  ? "bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/30 font-semibold rounded-lg shadow-sm transition-all"
+                  : "bg-primary hover:bg-primary/95 text-primary-foreground font-semibold shadow-lg glow-primary transition-all rounded-lg"
               }
             >
               {scanner.isRunning
@@ -631,9 +632,9 @@ export default function Arbitrage() {
 
           {/* SIDEBAR */}
           <div className="hidden lg:block lg:col-span-1 space-y-6 sticky top-6">
-            <Card className="bg-gray-900 border-gray-800 h-[calc(100vh-200px)] overflow-hidden flex flex-col">
+            <Card className="bg-card border-border h-[calc(100vh-200px)] overflow-hidden flex flex-col rounded-xl shadow-lg font-grotesk">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm uppercase tracking-wider text-gray-400">
+                <CardTitle className="text-xs uppercase tracking-wider text-slate-400 font-bold">
                   Market Filters
                 </CardTitle>
               </CardHeader>
@@ -660,38 +661,39 @@ export default function Arbitrage() {
 
             {/* STATS STRIP */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="bg-gray-900 border-gray-800 p-4 flex flex-col justify-between">
-                <div className="flex justify-between items-start mb-2">
+              <Card className="bg-card border-border p-5 flex flex-col justify-between rounded-xl shadow-lg relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-primary/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-300" />
+                <div className="flex justify-between items-start mb-2 relative font-grotesk">
                   <div>
-                    <p className="text-xs text-gray-500 uppercase font-bold">{activeWallet} Wallet</p>
-                    <h2 className="text-2xl font-bold text-white mt-1">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{activeWallet} Wallet</p>
+                    <h2 className="text-2xl font-700 text-white mt-1.5">
                       {userLoading
                         ? <Loader2 className="animate-spin w-5 h-5" />
                         : `$${getBalance().toFixed(2)}`}
                     </h2>
                   </div>
                   <Select value={activeWallet} onValueChange={(v: any) => setActiveWallet(v)}>
-                    <SelectTrigger className="w-[100px] h-8 text-xs bg-gray-800 border-gray-700">
+                    <SelectTrigger className="w-[100px] h-8 text-xs bg-secondary border-border text-foreground font-bold font-grotesk">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                    <SelectContent className="bg-card border-border text-foreground font-grotesk">
                       <SelectItem value="arb">Arb</SelectItem>
                       <SelectItem value="forex">Forex</SelectItem>
                       <SelectItem value="fut">Futures</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 mt-4 relative">
                   <Button
                     size="sm" variant="outline"
-                    className="flex-1 h-8 text-xs border-emerald-500/30 text-emerald-400"
+                    className="flex-1 h-8 text-xs border-primary/30 text-primary hover:bg-primary/10 font-bold font-grotesk transition-all shadow-sm"
                     onClick={() => { setWalletAction("deposit"); setWalletModalOpen(true); }}
                   >
                     Deposit
                   </Button>
                   <Button
                     size="sm" variant="outline"
-                    className="flex-1 h-8 text-xs border-blue-500/30 text-blue-400"
+                    className="flex-1 h-8 text-xs border-primary/30 text-primary hover:bg-primary/10 font-bold font-grotesk transition-all shadow-sm"
                     onClick={() => { setWalletAction("transfer"); setWalletModalOpen(true); }}
                   >
                     Transfer
@@ -700,34 +702,36 @@ export default function Arbitrage() {
               </Card>
 
               {/* Total P&L */}
-              <Card className="bg-gray-900 border-gray-800 p-4 flex flex-col justify-center items-center">
-                <p className="text-xs text-gray-500 uppercase">Total P&L</p>
-                <p className={`text-2xl font-bold ${userInfo?.total_pl && userInfo.total_pl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              <Card className="bg-card border-border p-5 flex flex-col justify-center items-center rounded-xl shadow-lg relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-primary/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-300" />
+                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider relative font-grotesk">Total P&L</p>
+                <p className={`text-2xl font-700 font-grotesk mt-1.5 relative ${userInfo?.total_pl && userInfo.total_pl >= 0 ? "text-green-400" : "text-destructive"}`}>
                   {userInfo?.total_pl ? `$${userInfo.total_pl.toFixed(2)}` : "$0.00"}
                 </p>
               </Card>
 
               {/* Live opportunity count */}
-              <Card className="bg-gray-900 border-gray-800 p-4 flex flex-col justify-center items-center">
-                <p className="text-xs text-gray-500 uppercase">Live Opps</p>
-                <p className="text-2xl font-bold text-white">{scanner.foundOpps.length}</p>
+              <Card className="bg-card border-border p-5 flex flex-col justify-center items-center rounded-xl shadow-lg relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-primary/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-300" />
+                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider relative font-grotesk">Live Opps</p>
+                <p className="text-2xl font-700 font-grotesk mt-1.5 text-white relative">{scanner.foundOpps.length}</p>
               </Card>
             </div>
 
             {/*TABS */}
             <Tabs defaultValue="scanner" className="w-full">
-              <TabsList className="bg-gray-900 border border-gray-800 p-1 w-full justify-start">
-                <TabsTrigger value="scanner" className="flex-1 sm:flex-none w-32 data-[state=active]:bg-emerald-600">Scanner</TabsTrigger>
-                <TabsTrigger value="manual"  className="flex-1 sm:flex-none w-32 data-[state=active]:bg-emerald-600">Manual Trade</TabsTrigger>
-                <TabsTrigger value="history" className="flex-1 sm:flex-none w-32 data-[state=active]:bg-emerald-600">History</TabsTrigger>
+              <TabsList className="bg-secondary border border-border p-1 w-full justify-start rounded-xl font-grotesk">
+                <TabsTrigger value="scanner" className="flex-1 sm:flex-none w-32 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold rounded-lg transition-all">Scanner</TabsTrigger>
+                <TabsTrigger value="manual"  className="flex-1 sm:flex-none w-32 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold rounded-lg transition-all">Manual Trade</TabsTrigger>
+                <TabsTrigger value="history" className="flex-1 sm:flex-none w-32 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold rounded-lg transition-all">History</TabsTrigger>
               </TabsList>
 
               {/* SCANNER TABLE */}
               <TabsContent value="scanner" className="mt-4">
-                <Card className="bg-gray-900 border-gray-800 overflow-hidden min-h-[400px]">
+                <Card className="bg-card border-border overflow-hidden min-h-[400px] rounded-xl shadow-lg">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[700px]">
-                      <thead className="bg-gray-950/50 border-b border-gray-800 text-xs text-gray-400 uppercase">
+                    <table className="w-full min-w-[700px] font-grotesk">
+                      <thead className="bg-secondary/20 border-b border-border text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                         <tr>
                           <th className="p-4 text-left">Symbol</th>
                           <th className="p-4 text-left">Strategy</th>
@@ -736,18 +740,18 @@ export default function Arbitrage() {
                           <th className="p-4 text-right">Action</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-800">
+                      <tbody className="divide-y divide-border/50 text-sm">
                         {scanner.foundOpps.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="p-12 text-center text-gray-500">
+                            <td colSpan={5} className="p-12 text-center text-slate-500 font-semibold">
                               {scanner.isRestarting ? (
-                                <span className="flex items-center justify-center gap-2 text-yellow-400">
-                                  <Loader2 className="animate-spin w-4 h-4" />
+                                <span className="flex items-center justify-center gap-2 text-warning font-bold">
+                                  <Loader2 className="animate-spin w-4 h-4 text-primary" />
                                   Reconnecting to scanner...
                                 </span>
                               ) : scanner.isRunning ? (
                                 <span className="flex items-center justify-center gap-2">
-                                  <Loader2 className="animate-spin w-4 h-4" />
+                                  <Loader2 className="animate-spin w-4 h-4 text-primary" />
                                   Scanning for opportunities...
                                 </span>
                               ) : (
@@ -757,23 +761,23 @@ export default function Arbitrage() {
                           </tr>
                         ) : (
                           scanner.foundOpps.map((opp, idx) => (
-                            <tr key={idx} className="hover:bg-gray-800/50 transition-colors">
-                              <td className="p-4 font-bold text-white">{opp.symbol}</td>
-                              <td className="p-4 text-sm">
-                                <span className="text-blue-400">{opp.buy_exchange}</span>
-                                <span className="mx-2 text-gray-600">→</span>
-                                <span className="text-purple-400">{opp.sell_exchange}</span>
+                            <tr key={idx} className="hover:bg-secondary/20 transition-colors">
+                              <td className="p-4 font-700 text-white">{opp.symbol}</td>
+                              <td className="p-4 text-sm font-semibold">
+                                <span className="text-primary font-bold">{opp.buy_exchange}</span>
+                                <span className="mx-2 text-slate-500">→</span>
+                                <span className="text-primary/70">{opp.sell_exchange}</span>
                               </td>
-                              <td className="p-4 text-right font-mono text-sm text-gray-300">
+                              <td className="p-4 text-right font-mono text-xs text-slate-300">
                                 ${opp.buy_price} / ${opp.sell_price}
                               </td>
-                              <td className="p-4 text-right font-bold text-emerald-400">
+                              <td className="p-4 text-right font-700 text-green-400">
                                 +{(opp.profit_percent * 100).toFixed(2)}%
                               </td>
                               <td className="p-4 text-right">
                                 <Button
                                   size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-500 h-8"
+                                  className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold shadow-md glow-primary transition-all font-grotesk"
                                   onClick={() => handleQuickTrade(opp)}
                                 >
                                   Trade
@@ -790,10 +794,10 @@ export default function Arbitrage() {
 
               {/*MANUAL TRADE */}
               <TabsContent value="manual" className="mt-4">
-                <Card className="bg-gray-900 border-gray-800 max-w-2xl mx-auto">
+                <Card className="bg-card border-border max-w-2xl mx-auto rounded-xl shadow-lg font-grotesk">
                   <CardHeader>
-                    <CardTitle>Manual Execution</CardTitle>
-                    <CardDescription>Execute a trade on specific exchanges.</CardDescription>
+                    <CardTitle className="font-700 text-white">Manual Execution</CardTitle>
+                    <CardDescription className="text-slate-450">Execute a trade on specific exchanges.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <form
@@ -802,15 +806,15 @@ export default function Arbitrage() {
                     >
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Symbol</Label>
+                          <Label className="font-semibold text-slate-300">Symbol</Label>
                           <Select
                             onValueChange={(v) => manualTradeForm.setValue("symbol", v)}
                             disabled={symbolsLoading}
                           >
-                            <SelectTrigger className="bg-gray-800 border-gray-700">
+                            <SelectTrigger className="bg-secondary border-border text-foreground font-bold">
                               <SelectValue placeholder={symbolsLoading ? "Loading..." : "Select Symbol"} />
                             </SelectTrigger>
-                            <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                            <SelectContent className="bg-card border-border text-foreground font-grotesk">
                               {symbolList.map((s: any, i: number) => {
                                 const symbol = typeof s === "object" ? s.name || s.symbol || s : s;
                                 return <SelectItem key={i} value={symbol}>{symbol}</SelectItem>;
@@ -818,27 +822,27 @@ export default function Arbitrage() {
                             </SelectContent>
                           </Select>
                           {manualTradeForm.formState.errors.symbol && (
-                            <p className="text-red-500 text-xs">{manualTradeForm.formState.errors.symbol.message}</p>
+                            <p className="text-destructive text-xs">{manualTradeForm.formState.errors.symbol.message}</p>
                           )}
                         </div>
                         <div className="space-y-2">
-                          <Label>Quantity</Label>
+                          <Label className="font-semibold text-slate-300">Quantity</Label>
                           <Input
                             type="text" inputMode="decimal" placeholder="0.00"
                             {...manualTradeForm.register("qty")}
-                            className="bg-gray-800 border-gray-700"
+                            className="bg-secondary border-border text-foreground focus:ring-1 focus:ring-primary font-bold font-mono"
                           />
                           {manualTradeForm.formState.errors.qty && (
-                            <p className="text-red-500 text-xs">{manualTradeForm.formState.errors.qty.message}</p>
+                            <p className="text-destructive text-xs">{manualTradeForm.formState.errors.qty.message}</p>
                           )}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Buy From</Label>
+                          <Label className="font-semibold text-slate-300">Buy From</Label>
                           <Select onValueChange={(v) => manualTradeForm.setValue("buy_exchange", v)}>
-                            <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue placeholder="Exchange" /></SelectTrigger>
-                            <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                            <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue placeholder="Exchange" /></SelectTrigger>
+                            <SelectContent className="bg-card border-border text-foreground font-grotesk">
                               {exchangeList.map((e: any) => (
                                 <SelectItem key={e.name || e} value={e.name || e}>{e.name || e}</SelectItem>
                               ))}
@@ -846,10 +850,10 @@ export default function Arbitrage() {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label>Sell To</Label>
+                          <Label className="font-semibold text-slate-300">Sell To</Label>
                           <Select onValueChange={(v) => manualTradeForm.setValue("sell_exchange", v)}>
-                            <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue placeholder="Exchange" /></SelectTrigger>
-                            <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                            <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue placeholder="Exchange" /></SelectTrigger>
+                            <SelectContent className="bg-card border-border text-foreground font-grotesk">
                               {exchangeList.map((e: any) => (
                                 <SelectItem key={e.name || e} value={e.name || e}>{e.name || e}</SelectItem>
                               ))}
@@ -859,7 +863,7 @@ export default function Arbitrage() {
                       </div>
                       <Button
                         disabled={tradeMutation.isPending}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 mt-4"
+                        className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-semibold shadow-lg glow-primary mt-4 transition-all"
                       >
                         {tradeMutation.isPending ? "Executing..." : "Place Order"}
                       </Button>
@@ -870,31 +874,34 @@ export default function Arbitrage() {
 
               {/*HISTORY */}
               <TabsContent value="history" className="mt-4">
-                <Card className="bg-gray-900 border-gray-800">
+                <Card className="bg-card border-border rounded-xl shadow-lg overflow-hidden font-grotesk">
                   <div className="p-4 space-y-2">
                     {userArbTrades.length === 0 ? (
-                      <p className="text-gray-500 text-center py-8">No trade history.</p>
+                      <p className="text-slate-500 text-center py-8">No trade history recorded yet.</p>
                     ) : (
                       userArbTrades.map((t: any, i: number) => (
                         <div
                           key={i}
-                          className="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg border border-gray-700/50"
+                          className="flex justify-between items-center p-3.5 bg-secondary/35 hover:bg-secondary/50 rounded-xl border border-border/50 transition-all"
                         >
                           <div>
-                            <p className="font-bold text-white text-sm">{t.symbol}</p>
-                            <p className="text-xs text-gray-400">{t.buy_exchange} → {t.sell_exchange}</p>
+                            <p className="font-700 text-white text-sm leading-none mb-1.5">{t.symbol}</p>
+                            <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                              <span className="text-primary font-semibold">{t.buy_exchange}</span>
+                              <span className="text-slate-650">→</span>
+                              <span className="text-primary/70 font-semibold">{t.sell_exchange}</span>
+                            </p>
                             {t.timestamp && (
-                              <p className="text-xs text-gray-600 mt-0.5">
+                              <p className="text-[10px] text-slate-600 mt-1.5 font-mono">
                                 {new Date(t.timestamp).toLocaleString()}
                               </p>
                             )}
                           </div>
                           <div className="text-right">
-                            <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">
+                            <Badge className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">
                               Qty: {t.qty > 0 ? t.qty : "---"}
                             </Badge>
-                            {/* realized_profit is the correct API field — not profit_loss */}
-                            <p className="text-xs font-mono mt-1 text-gray-300">
+                            <p className="text-xs font-mono font-700 mt-2 text-slate-300">
                               {t.realized_profit != null ? `$${t.realized_profit}` : "---"}
                             </p>
                           </div>
@@ -912,27 +919,27 @@ export default function Arbitrage() {
 
       {/* QUICK TRADE MODAL */}
       <Dialog open={tradeModalOpen} onOpenChange={setTradeModalOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white">
+        <DialogContent className="glass bg-card border-border text-foreground font-grotesk rounded-xl shadow-2xl max-w-sm">
           <DialogHeader>
-            <DialogTitle>Quick Trade: {selectedOpp?.symbol}</DialogTitle>
+            <DialogTitle className="font-700 text-white text-lg">Quick Trade: {selectedOpp?.symbol}</DialogTitle>
           </DialogHeader>
           {selectedOpp && (
-            <div className="space-y-4">
-              <div className="flex justify-between text-sm bg-gray-800 p-3 rounded">
+            <div className="space-y-4 mt-2">
+              <div className="flex justify-between text-xs bg-secondary/55 p-3 rounded-lg border border-border/40 font-bold">
                 <span>
                   Spread:{" "}
-                  <span className="text-emerald-400 font-bold">
+                  <span className="text-green-400 font-bold">
                     {(selectedOpp.profit_percent * 100).toFixed(2)}%
                   </span>
                 </span>
-                <span>Price: {selectedOpp.buy_price}</span>
+                <span className="text-slate-350">Price: ${selectedOpp.buy_price}</span>
               </div>
-              <div>
-                <Label>Quantity</Label>
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-300 text-xs">Quantity</Label>
                 <Input
-                  type="text" inputMode="decimal" autoFocus placeholder="Amount"
+                  type="text" inputMode="decimal" autoFocus placeholder="Enter amount..."
                   value={quickAmount}
-                  className="bg-gray-800 border-gray-700 mt-1"
+                  className="bg-secondary border-border text-foreground focus:ring-1 focus:ring-primary font-bold font-mono"
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val === "" || /^\d*\.?\d*$/.test(val)) setQuickAmount(val);
@@ -943,7 +950,7 @@ export default function Arbitrage() {
                 />
               </div>
               <Button
-                className="w-full bg-emerald-600"
+                className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-semibold shadow-lg glow-primary mt-2"
                 onClick={() => confirmQuickTrade(parseFloat(quickAmount))}
               >
                 Confirm Execution
@@ -955,9 +962,9 @@ export default function Arbitrage() {
 
       {/* WALLET MODAL  */}
       <Dialog open={walletModalOpen} onOpenChange={setWalletModalOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white">
+        <DialogContent className="glass bg-card border-border text-foreground font-grotesk rounded-xl shadow-2xl max-w-md">
           <DialogHeader>
-            <DialogTitle className="capitalize">{walletAction} Assets</DialogTitle>
+            <DialogTitle className="capitalize font-700 text-white text-lg">{walletAction} Assets</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={walletForm.handleSubmit((d) => walletMutation.mutate(d))}
@@ -965,28 +972,28 @@ export default function Arbitrage() {
           >
             {walletAction === "transfer" && (
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label>From</Label>
+                <div className="space-y-1.5">
+                  <Label className="font-semibold text-slate-300 text-xs">From</Label>
                   <Select
                     onValueChange={(v: any) => walletForm.setValue("from", v)}
                     defaultValue={walletForm.watch("from")}
                   >
-                    <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                    <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-border text-foreground font-grotesk">
                       <SelectItem value="forex">Forex</SelectItem>
                       <SelectItem value="arb">Arb</SelectItem>
                       <SelectItem value="fut">Futures</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label>To</Label>
+                <div className="space-y-1.5">
+                  <Label className="font-semibold text-slate-300 text-xs">To</Label>
                   <Select
                     onValueChange={(v: any) => walletForm.setValue("to", v)}
                     defaultValue={walletForm.watch("to")}
                   >
-                    <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                    <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-border text-foreground font-grotesk">
                       <SelectItem value="forex">Forex</SelectItem>
                       <SelectItem value="arb">Arb</SelectItem>
                       <SelectItem value="fut">Futures</SelectItem>
@@ -996,48 +1003,48 @@ export default function Arbitrage() {
               </div>
             )}
             {walletAction === "transfer" && walletForm.formState.errors.to && (
-              <p className="text-red-500 text-xs">{walletForm.formState.errors.to.message}</p>
+              <p className="text-destructive text-xs">{walletForm.formState.errors.to.message}</p>
             )}
 
             {walletAction === "withdraw" && (
-              <div className="space-y-2">
-                <Label>Wallet Address</Label>
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-300 text-xs">Wallet Address</Label>
                 <Input
                   {...walletForm.register("address")}
-                  className="bg-gray-800 border-gray-700"
+                  className="bg-secondary border-border text-foreground focus:ring-1 focus:ring-primary font-bold font-mono"
                   placeholder="0x..."
                 />
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label>
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-300 text-xs">
                   Amount
                   {walletAction === "transfer" && (
-                    <span className="text-emerald-400 text-xs ml-1">(USDT)</span>
+                    <span className="text-primary text-xs ml-1">(USDT)</span>
                   )}
                 </Label>
                 <div className="relative">
                   <Input
                     type="text" inputMode="decimal"
                     {...walletForm.register("amount")}
-                    className="bg-gray-800 border-gray-700 pr-12"
+                    className="bg-secondary border-border text-foreground pr-12 focus:ring-1 focus:ring-primary font-bold font-mono"
                   />
                   {walletAction === "transfer" && (
-                    <span className="absolute right-3 top-2.5 text-xs text-gray-500 font-bold">USDT</span>
+                    <span className="absolute right-3 top-2.5 text-xs text-slate-500 font-bold">USDT</span>
                   )}
                 </div>
                 {walletForm.formState.errors.amount && (
-                  <p className="text-red-500 text-xs">{walletForm.formState.errors.amount.message}</p>
+                  <p className="text-destructive text-xs">{walletForm.formState.errors.amount.message}</p>
                 )}
               </div>
               {(walletAction === "deposit" || walletAction === "withdraw") && (
-                <div className="space-y-1">
-                  <Label>Asset</Label>
+                <div className="space-y-1.5">
+                  <Label className="font-semibold text-slate-300 text-xs">Asset</Label>
                   <Select onValueChange={(v) => walletForm.setValue("currency", v)} defaultValue="USDT">
-                    <SelectTrigger className="bg-gray-800 border-gray-700"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                    <SelectTrigger className="bg-secondary border-border text-foreground font-bold"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-border text-foreground font-grotesk">
                       <SelectItem value="USDT">USDT</SelectItem>
                       <SelectItem value="BTC">BTC</SelectItem>
                       <SelectItem value="ETH">ETH</SelectItem>
@@ -1048,14 +1055,14 @@ export default function Arbitrage() {
             </div>
 
             {walletAction === "deposit" && (
-              <div className="space-y-2">
-                <Label>Deposit Receipt</Label>
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-700 border-dashed rounded-lg cursor-pointer bg-gray-800 hover:bg-gray-700 transition-colors">
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-slate-300 text-xs">Deposit Receipt</Label>
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-border border-dashed rounded-xl cursor-pointer bg-secondary/40 hover:bg-secondary/65 transition-all">
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <UploadCloud className="w-8 h-8 mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-400">
+                    <UploadCloud className="w-8 h-8 mb-2 text-primary glow-text" />
+                    <p className="text-sm text-slate-400">
                       {receipt ? (
-                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                        <span className="text-primary font-bold flex items-center gap-1">
                           <FileText className="w-4 h-4" /> {receipt.name}
                         </span>
                       ) : (
@@ -1073,7 +1080,7 @@ export default function Arbitrage() {
 
             <Button
               disabled={walletMutation.isPending}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 capitalize"
+              className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-semibold shadow-lg glow-primary capitalize mt-2 transition-all"
             >
               {walletMutation.isPending ? "Processing..." : `Confirm ${walletAction}`}
             </Button>
@@ -1099,7 +1106,7 @@ const FilterContent = ({
   return (
     <div className={`space-y-6 ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
       <div>
-        <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase">Exchanges</h4>
+        <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Exchanges</h4>
         <div className="space-y-1">
           {exchanges.map((ex: any, i: number) => {
             const name = getName(ex);
@@ -1107,21 +1114,21 @@ const FilterContent = ({
             return (
               <div
                 key={i} onClick={() => onToggleExchange(name)}
-                className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${
+                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-sm font-semibold transition-all ${
                   isSelected
-                    ? "bg-emerald-900/20 text-emerald-300 border border-emerald-500/30"
-                    : "text-gray-400 hover:bg-gray-800 border border-transparent"
+                    ? "bg-primary/10 text-primary border border-primary/20 shadow-sm"
+                    : "text-slate-400 hover:bg-secondary border border-transparent"
                 }`}
               >
                 <span>{name}</span>
-                {isSelected && <CheckCircle2 className="w-3 h-3" />}
+                {isSelected && <CheckCircle2 className="w-3 h-3 text-primary" />}
               </div>
             );
           })}
         </div>
       </div>
       <div>
-        <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase">Pairs</h4>
+        <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Pairs</h4>
         <div className="space-y-1">
           {symbols.map((sym: any, i: number) => {
             const name = getName(sym);
@@ -1129,14 +1136,14 @@ const FilterContent = ({
             return (
               <div
                 key={i} onClick={() => onToggleSymbol(name)}
-                className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${
+                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-sm font-semibold transition-all ${
                   isSelected
-                    ? "bg-emerald-900/20 text-emerald-300 border border-emerald-500/30"
-                    : "text-gray-400 hover:bg-gray-800 border border-transparent"
+                    ? "bg-primary/10 text-primary border border-primary/20 shadow-sm"
+                    : "text-slate-400 hover:bg-secondary border border-transparent"
                 }`}
               >
                 <span>{name}</span>
-                {isSelected && <CheckCircle2 className="w-3 h-3" />}
+                {isSelected && <CheckCircle2 className="w-3 h-3 text-primary" />}
               </div>
             );
           })}

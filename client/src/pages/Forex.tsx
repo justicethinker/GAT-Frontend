@@ -47,32 +47,33 @@ const CURRENCY_PAIRS: CurrencyPair[] = [
 // 2. SUB-COMPONENTS
 // ──────────────────────────────────────────────────────────────
 
-const SessionCard = ({ session }: { session: Session }) => {
+const SessionCard = ({ session }: { session: session }) => {
   const isOpen = session.status === "open";
   
   return (
     <div className={cn(
-      "p-4 rounded-xl border transition-all",
+      "p-4 rounded-xl border transition-all relative overflow-hidden group font-grotesk",
       isOpen 
-        ? "bg-slate-800 border-emerald-500/30 shadow-lg shadow-emerald-900/10" 
-        : "bg-slate-900/50 border-slate-800 opacity-70"
+        ? "bg-secondary/35 border-amber-500/30 shadow-lg shadow-amber-900/5" 
+        : "bg-secondary/15 border-border opacity-70"
     )}>
-      <div className="flex justify-between items-start mb-3">
+      <div className="absolute top-0 right-0 w-16 h-16 rounded-full bg-amber-550/5 -translate-y-1/2 translate-x-1/2" />
+      <div className="flex justify-between items-start mb-3 relative">
         <div className="flex items-center gap-2">
-          <Globe className={cn("w-4 h-4", isOpen ? "text-emerald-400" : "text-slate-500")} />
-          <h3 className="text-white font-bold text-sm">{session.name}</h3>
+          <Globe className={cn("w-4 h-4 shrink-0", isOpen ? "text-amber-400 glow-text" : "text-slate-500")} />
+          <h3 className="text-white font-bold text-sm leading-none">{session.name}</h3>
         </div>
-        <div className={cn("w-2 h-2 rounded-full", isOpen ? "bg-emerald-400 animate-pulse" : "bg-slate-600")} />
+        <div className={cn("w-2 h-2 rounded-full", isOpen ? "bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-slate-650")} />
       </div>
       
-      <div className="space-y-1">
-        <p className="text-slate-400 text-xs font-medium">{session.timezone}</p>
+      <div className="space-y-1 relative text-xs">
+        <p className="text-slate-500 font-medium">{session.timezone}</p>
         <p className="text-white font-mono text-sm font-bold tracking-tight">{session.time}</p>
         <span className={cn(
-          "inline-block mt-1 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border",
+          "inline-block mt-1 text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border leading-none",
           isOpen 
-            ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" 
-            : "text-slate-500 bg-slate-800 border-slate-700"
+            ? "text-amber-400 bg-amber-500/10 border-amber-500/20" 
+            : "text-slate-500 bg-secondary border-border"
         )}>
           {session.status}
         </span>
@@ -82,19 +83,19 @@ const SessionCard = ({ session }: { session: Session }) => {
 };
 
 const MarketMetric = ({ title, value, status, width }: { title: string, value: string, status: string, width: string }) => (
-  <div>
+  <div className="font-grotesk">
     <div className="flex justify-between items-center mb-2">
-      <span className="text-slate-400 text-xs font-medium">{title}</span>
+      <span className="text-slate-400 text-xs font-semibold">{title}</span>
       <span className={cn(
         "text-xs font-bold uppercase",
-        status === "High" ? "text-blue-400" : "text-emerald-400"
+        status === "High" ? "text-amber-400" : "text-primary"
       )}>{status}</span>
     </div>
-    <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+    <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden border border-border/30">
       <div 
         className={cn(
-          "h-full rounded-full shadow-[0_0_10px_currentColor]",
-          status === "High" ? "bg-blue-500 text-blue-500" : "bg-emerald-500 text-emerald-500"
+          "h-full rounded-full transition-all duration-500",
+          status === "High" ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]" : "bg-primary shadow-[0_0_8px_rgba(47,211,193,0.4)]"
         )} 
         style={{ width }} 
       />
@@ -116,7 +117,7 @@ export default function Forex() {
 
   return (
     <Layout>
-      <div className="w-full max-w-7xl mx-auto px-4 py-8">
+      <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-6">
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
@@ -124,21 +125,22 @@ export default function Forex() {
           <div className="lg:col-span-8 space-y-6">
             
             {/* TRADING SESSIONS */}
-            <Card className="bg-slate-900 border-slate-800 p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <Card className="bg-card border-border p-6 rounded-xl shadow-lg relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-amber-550/5 -translate-y-1/2 translate-x-1/2 group-hover:scale-105 transition-transform duration-500" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 relative font-grotesk">
                 <div>
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-emerald-500" />
+                    <Clock className="w-5 h-5 text-amber-400" />
                     Trading Sessions
                   </h2>
                   <p className="text-slate-400 text-xs mt-1">Global market operating hours</p>
                 </div>
-                <div className="bg-slate-950 border border-slate-800 px-4 py-2 rounded-lg text-emerald-400 font-mono text-sm shadow-inner">
+                <div className="bg-secondary border border-border px-4 py-2 rounded-lg text-amber-400 font-mono text-sm font-bold shadow-inner">
                   {currentTime.toLocaleTimeString()}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative">
                 {SESSIONS.map((session) => (
                   <SessionCard key={session.name} session={session} />
                 ))}
@@ -146,18 +148,18 @@ export default function Forex() {
             </Card>
 
             {/* LIVE CURRENCY PAIRS */}
-            <Card className="bg-slate-900 border-slate-800 overflow-hidden">
-              <div className="p-6 border-b border-slate-800">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-blue-500" />
+            <Card className="bg-card border-border overflow-hidden rounded-xl shadow-lg">
+              <div className="p-6 border-b border-border font-grotesk">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2 leading-none">
+                  <Activity className="w-5 h-5 text-primary glow-text" />
                   Live Markets
                 </h2>
               </div>
               
               {/* DESKTOP TABLE */}
               <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-950 text-xs uppercase text-slate-500 font-semibold border-b border-slate-800">
+                <table className="w-full text-left font-grotesk">
+                  <thead className="bg-secondary/20 text-[10px] uppercase text-slate-400 font-bold border-b border-border tracking-wider">
                     <tr>
                       <th className="px-6 py-4">Pair</th>
                       <th className="px-6 py-4 text-right">Price</th>
@@ -166,12 +168,12 @@ export default function Forex() {
                       <th className="px-6 py-4 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800 text-sm">
+                  <tbody className="divide-y divide-border/50 text-sm">
                     {CURRENCY_PAIRS.map((pair) => (
-                      <tr key={pair.pair} className="group hover:bg-slate-800/40 transition-colors">
+                      <tr key={pair.pair} className="group hover:bg-secondary/20 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shadow-sm shrink-0">
                               <DollarSign className="w-4 h-4" />
                             </div>
                             <span className="font-bold text-white">{pair.pair}</span>
@@ -182,24 +184,24 @@ export default function Forex() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <span className={cn(
-                            "px-2 py-1 rounded text-xs font-bold",
+                            "px-2 py-1 rounded text-xs font-bold border leading-none block w-fit ml-auto",
                             pair.change >= 0 
-                              ? "bg-emerald-500/10 text-emerald-400" 
-                              : "bg-red-500/10 text-red-400"
+                              ? "bg-green-500/10 text-green-400 border-green-550/20" 
+                              : "bg-destructive/10 text-destructive border-destructive/20"
                           )}>
                             {pair.change >= 0 ? "+" : ""}{pair.change.toFixed(2)}%
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           {pair.trend === "up" 
-                            ? <ArrowUpRight className="w-5 h-5 text-emerald-500 ml-auto" /> 
-                            : <ArrowDownRight className="w-5 h-5 text-red-500 ml-auto" />
+                            ? <ArrowUpRight className="w-5 h-5 text-green-400 ml-auto" /> 
+                            : <ArrowDownRight className="w-5 h-5 text-destructive ml-auto" />
                           }
                         </td>
                         <td className="px-6 py-4 text-right">
                           <Button 
                             size="sm" 
-                            className="bg-emerald-600 hover:bg-emerald-500 h-8 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="bg-primary hover:bg-primary/95 text-primary-foreground h-8 text-xs font-bold opacity-0 group-hover:opacity-100 transition-all shadow-md glow-primary font-grotesk rounded-lg"
                           >
                             Trade
                           </Button>
@@ -211,24 +213,24 @@ export default function Forex() {
               </div>
 
               {/* MOBILE LIST */}
-              <div className="sm:hidden divide-y divide-slate-800">
+              <div className="sm:hidden divide-y divide-border/50 text-sm">
                 {CURRENCY_PAIRS.map((pair) => (
-                  <div key={pair.pair} className="p-4 flex items-center justify-between hover:bg-slate-800/30">
+                  <div key={pair.pair} className="p-4 flex items-center justify-between hover:bg-secondary/15 font-grotesk">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                      <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shadow-sm shrink-0">
                         <DollarSign className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-white font-bold text-sm">{pair.pair}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-slate-400 font-mono text-xs">{pair.price.toFixed(4)}</span>
-                          <span className={cn("text-[10px] font-bold", pair.change >= 0 ? "text-emerald-400" : "text-red-400")}>
+                        <h3 className="text-white font-bold text-sm leading-none mb-1.5">{pair.pair}</h3>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-450 font-mono text-xs leading-none">{pair.price.toFixed(4)}</span>
+                          <span className={cn("text-[10px] font-bold leading-none", pair.change >= 0 ? "text-green-400" : "text-destructive")}>
                             {pair.change >= 0 ? "+" : ""}{pair.change.toFixed(2)}%
                           </span>
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" className="bg-emerald-600 h-8 text-xs font-bold">Trade</Button>
+                    <Button size="sm" className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold shadow-md h-8 text-xs rounded-lg transition-all">Trade</Button>
                   </div>
                 ))}
               </div>
@@ -239,9 +241,9 @@ export default function Forex() {
           <div className="lg:col-span-4 space-y-6">
             
             {/* Market Overview */}
-            <Card className="bg-slate-900 border-slate-800 p-6">
-              <h3 className="text-white font-bold mb-6 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-purple-500" />
+            <Card className="bg-card border-border p-6 rounded-xl shadow-lg">
+              <h3 className="text-white font-bold mb-6 flex items-center gap-2 font-grotesk text-sm">
+                <TrendingUp className="w-5 h-5 text-amber-400" />
                 Market Overview
               </h3>
               <div className="space-y-6">
@@ -251,37 +253,37 @@ export default function Forex() {
             </Card>
 
             {/* Economic Calendar */}
-            <Card className="bg-slate-900 border-slate-800 p-6">
-              <h3 className="text-white font-bold mb-6 flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-yellow-500" />
+            <Card className="bg-card border-border p-6 rounded-xl shadow-lg font-grotesk">
+              <h3 className="text-white font-bold mb-6 flex items-center gap-2 text-sm">
+                <CalendarDays className="w-5 h-5 text-amber-400" />
                 Economic Calendar
               </h3>
               <div className="space-y-4">
                 
-                <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors">
+                <div className="p-4 bg-secondary/45 border border-border/50 rounded-xl hover:border-primary/45 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <p className="text-white font-bold text-sm">US Non-Farm Payrolls</p>
                       <p className="text-slate-500 text-xs mt-0.5">United States</p>
                     </div>
-                    <span className="px-2 py-0.5 bg-red-500/10 text-red-400 rounded text-[10px] font-bold border border-red-500/20">
+                    <span className="px-2 py-0.5 bg-destructive/10 text-destructive rounded text-[9px] font-bold border border-destructive/20 tracking-wider">
                       HIGH
                     </span>
                   </div>
-                  <p className="text-slate-400 text-xs font-mono bg-slate-900/50 inline-block px-2 py-1 rounded">Expected: 180K</p>
+                  <p className="text-slate-400 text-xs font-mono bg-secondary/70 inline-block px-2 py-1 rounded">Expected: 180K</p>
                 </div>
                 
-                <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors">
+                <div className="p-4 bg-secondary/45 border border-border/50 rounded-xl hover:border-primary/45 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <p className="text-white font-bold text-sm">ECB Rate Decision</p>
                       <p className="text-slate-500 text-xs mt-0.5">European Union</p>
                     </div>
-                    <span className="px-2 py-0.5 bg-yellow-500/10 text-yellow-400 rounded text-[10px] font-bold border border-yellow-500/20">
+                    <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 rounded text-[9px] font-bold border border-amber-500/20 tracking-wider">
                       MED
                     </span>
                   </div>
-                  <p className="text-slate-400 text-xs font-mono bg-slate-900/50 inline-block px-2 py-1 rounded">Expected: 4.50%</p>
+                  <p className="text-slate-400 text-xs font-mono bg-secondary/70 inline-block px-2 py-1 rounded">Expected: 4.50%</p>
                 </div>
 
               </div>

@@ -9,9 +9,9 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        lg: ".5625rem", /* 9px */
-        md: ".375rem", /* 6px */
-        sm: ".1875rem", /* 3px */
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
       colors: {
         emerald: {
@@ -100,7 +100,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["Verdana", "Geneva", "Tahoma", "sans-serif"],
+        sans: ["Inter", "sans-serif"],
+        grotesk: ["Space Grotesk", "sans-serif"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
       },
